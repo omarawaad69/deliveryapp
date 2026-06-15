@@ -87,6 +87,7 @@
         .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
         .tab { flex: 1; padding: 10px; text-align: center; background: #e2e8f0; border-radius: 12px; font-weight: bold; cursor: pointer; }
         .tab.active { background: var(--primary); color: #1e293b; }
+        .btn-sm { padding: 8px 12px; font-size: 14px; width: auto; display: inline-block; }
     </style>
 </head>
 <body>
@@ -205,7 +206,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let currentUser = null; // { name, username, role, phone }
+    let currentUser = null; // { name, username, role, phone, id }
     let currentOrderId = null;
 
     // ---------- التنقل بين الشاشات ----------
@@ -288,6 +289,7 @@
             driverName: null,
             driverPhone: null,
             counterPrice: null,
+            counterBy: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
@@ -303,9 +305,8 @@
             snap.forEach(docSnap => {
                 const o = docSnap.data();
                 const id = docSnap.id;
-                // السائق يرى المعلقة، أو طلباته هو
                 if (o.driverId && o.driverId !== currentUser.username) return;
-                if (o.status === 'delivered' || o.status === 'cancelled') return; // إخفاء المكتملة والملغاة
+                if (o.status === 'delivered' || o.status === 'cancelled') return;
                 html += `<div class="card">
                     <b>${o.pickup} ← ${o.dropoff}</b><br>
                     الزبون: ${o.customerName} (${o.customerPhone})<br>
@@ -379,19 +380,61 @@
         let html = '';
         snap.forEach(docSnap => {
             const o = docSnap.data();
-            html += `<div class="card" onclick="viewAdminOrderDetail('${docSnap.id}')" style="cursor:pointer">
+            const id = docSnap.id;
+            html += `<div class="card">
                 <b>${o.pickup} ← ${o.dropoff}</b><br>
                 <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
-                | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}
-            </div>`;
+                | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}<br>
+                السعر: ${o.price} ج.م`;
+            if (o.status !== 'delivered' && o.status !== 'cancelled') {
+                html += `<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                    <button class="btn btn-sm btn-danger" onclick="adminCancelOrder('${id}')">إلغاء الطلب</button>
+                    <button class="btn btn-sm btn-primary" onclick="adminChangePrice('${id}')">تعديل السعر</button>
+                    <button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>
+                </div>`;
+            } else {
+                html += `<br><button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>`;
+            }
+            html += `</div>`;
         });
         document.getElementById('adminOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+    };
+
+    window.adminCancelOrder = async (orderId) => {
+        if (confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) {
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "cancelled",
+                updatedAt: serverTimestamp()
+            });
+            loadAllOrders(); // تحديث القائمة
+        }
+    };
+
+    window.adminChangePrice = (orderId) => {
+        const newPrice = prompt("أدخل السعر الجديد (بالجنية):");
+        if (newPrice && !isNaN(newPrice) && Number(newPrice) > 0) {
+            updateDoc(doc(db, "orders", orderId), {
+                status: "negotiating",
+                counterPrice: Number(newPrice),
+                counterBy: currentUser.username,
+                updatedAt: serverTimestamp()
+            }).then(() => loadAllOrders());
+        } else if (newPrice !== null) {
+            alert("سعر غير صحيح");
+        }
     };
 
     window.viewAdminOrderDetail = async (orderId) => {
         const docSnap = await getDoc(doc(db, "orders", orderId));
         if (!docSnap.exists()) return;
         const o = docSnap.data();
+        let actionButtons = '';
+        if (o.status !== 'delivered' && o.status !== 'cancelled') {
+            actionButtons = `
+                <button class="btn btn-danger" onclick="adminCancelOrder('${orderId}')">إلغاء الطلب</button>
+                <button class="btn btn-primary" onclick="adminChangePrice('${orderId}')">تعديل السعر</button>
+            `;
+        }
         const content = `
             <h3>تفاصيل الطلب</h3>
             <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
@@ -401,6 +444,7 @@
             <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
             <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
             <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
+            ${actionButtons}
             <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
         `;
         document.getElementById('adminOrderDetailContent').innerHTML = content;
@@ -433,7 +477,6 @@
             document.getElementById('addDriverError').innerText = 'اسم المستخدم وكلمة المرور والاسم مطلوبة';
             return;
         }
-        // تحقق من عدم وجود مستخدم بنفس الاسم
         const existQ = query(collection(db, "users"), where("username", "==", username));
         const existSnap = await getDocs(existQ);
         if (!existSnap.empty) {
@@ -466,9 +509,7 @@
     // --- التقارير ---
     function listenAdminReports() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        onSnapshot(q, snap => {
-            // سيتم استدعاؤها عند تغيير أي طلب، لكننا نستخدم getDocs لمرة واحدة عند التبويب
-        });
+        onSnapshot(q, snap => {}); // مجرد استماع
     }
 
     window.loadAdminReports = async () => {
