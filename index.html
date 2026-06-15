@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تطبيق التوصيل</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <!-- reCAPTCHA -->
-    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <style>
         :root {
             --primary: #d4af37;
@@ -14,7 +12,6 @@
             --bg: #f4f6f9;
             --card: #ffffff;
             --text: #1e293b;
-            --text-light: #64748b;
             --success: #10b981;
             --danger: #ef4444;
             --warning: #f59e0b;
@@ -37,9 +34,7 @@
             display: flex; align-items: center; justify-content: center; gap: 8px;
             transition: all 0.3s;
         }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary { background: var(--primary); color: #1e293b; }
-        .btn-primary:hover { background: var(--primary-dark); }
         .btn-success { background: var(--success); color: white; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
@@ -58,16 +53,12 @@
             font-size: 1.6rem; font-weight: bold; position: sticky; top: 0;
             z-index: 10; border-bottom: 3px solid var(--primary);
         }
-        .header i { margin-left: 8px; }
         .sub-header {
             display: flex; justify-content: space-between; align-items: center;
             padding: 12px; background: white; border-radius: 14px;
             margin-bottom: 12px; box-shadow: var(--shadow);
         }
-        .badge {
-            background: var(--primary); color: #1e293b; padding: 4px 10px;
-            border-radius: 20px; font-size: 0.85rem; font-weight: bold;
-        }
+        .badge { background: var(--primary); color: #1e293b; padding: 4px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; }
         .status-badge {
             display: inline-block; padding: 4px 12px; border-radius: 20px;
             font-size: 0.8rem; font-weight: bold; color: white;
@@ -90,59 +81,47 @@
         .chat-msg { margin-bottom: 8px; padding: 8px 12px; background: #e2e8f0; border-radius: 12px; }
         .msg-mine { background: #dbeafe; text-align: left; }
         .msg-sender { font-weight: bold; color: var(--primary-dark); }
+        .text-center { text-align: center; }
     </style>
 </head>
 <body>
 
-<!-- ========== شاشة تسجيل الدخول ========== -->
-<div id="loginScreen" class="app-container">
-    <div style="text-align:center; margin:40px 0;">
+<!-- ========== الشاشة الرئيسية ========== -->
+<div id="mainScreen" class="app-container">
+    <div class="text-center" style="margin:40px 0;">
         <i class="fas fa-motorcycle" style="font-size:60px; color:var(--primary);"></i>
         <h2 style="margin:16px 0;">تطبيق التوصيل</h2>
     </div>
     <div class="card">
+        <button class="btn btn-primary" onclick="showCustomerOrderForm()"><i class="fas fa-shopping-bag"></i> طلب توصيل جديد</button>
+        <button class="btn btn-outline" onclick="showLoginForm()"><i class="fas fa-sign-in-alt"></i> دخول السائقين والإدارة</button>
+    </div>
+</div>
+
+<!-- ========== شاشة تسجيل الدخول ========== -->
+<div id="loginScreen" class="app-container hidden">
+    <div class="card">
         <h3>تسجيل الدخول</h3>
-        <input type="email" id="email" placeholder="البريد الإلكتروني">
-        <input type="password" id="password" placeholder="كلمة السر">
-        <!-- reCAPTCHA للدخول -->
-        <div class="g-recaptcha" 
-             data-sitekey="6LdtDyEtAAAAAAK4rtSn7ZgmZbxqffDLN1FndoiX" 
-             data-callback="onLoginCaptchaSuccess" 
-             data-expired-callback="onLoginCaptchaExpired"></div>
-        <button class="btn btn-primary" id="loginBtn" onclick="login()" disabled>دخول</button>
-        <button class="btn btn-outline" onclick="goToRegister()">إنشاء حساب جديد</button>
+        <input type="text" id="username" placeholder="اسم المستخدم">
+        <input type="password" id="password" placeholder="كلمة المرور">
+        <button class="btn btn-primary" onclick="login()">دخول</button>
+        <button class="btn btn-outline" onclick="goToMain()">رجوع</button>
         <div id="loginError" style="color:red; text-align:center;"></div>
     </div>
 </div>
 
-<!-- ========== شاشة إنشاء حساب ========== -->
-<div id="registerScreen" class="app-container hidden">
+<!-- ========== شاشة طلب العميل (بدون تسجيل) ========== -->
+<div id="customerOrderScreen" class="app-container hidden">
+    <div class="header"><i class="fas fa-user"></i> طلب جديد</div>
     <div class="card">
-        <h3>إنشاء حساب</h3>
-        <input type="email" id="regEmail" placeholder="البريد الإلكتروني">
-        <input type="password" id="regPassword" placeholder="كلمة السر (6 أحرف)">
-        <input type="text" id="regName" placeholder="الاسم الكامل">
-        <select id="regRole"><option value="customer">زبون</option><option value="driver">سائق</option></select>
-        <!-- reCAPTCHA للتسجيل -->
-        <div class="g-recaptcha" 
-             data-sitekey="6LdtDyEtAAAAAAK4rtSn7ZgmZbxqffDLN1FndoiX" 
-             data-callback="onRegCaptchaSuccess" 
-             data-expired-callback="onRegCaptchaExpired"></div>
-        <button class="btn btn-primary" id="regBtn" onclick="register()" disabled>تسجيل</button>
-        <button class="btn btn-outline" onclick="goToLogin()">العودة لتسجيل الدخول</button>
-        <div id="regError" style="color:red; text-align:center;"></div>
+        <input type="text" id="custName" placeholder="اسمك الكامل">
+        <input type="tel" id="custPhone" placeholder="رقم الهاتف">
+        <input type="text" id="pickupAddress" placeholder="مكان الطلب (المطعم/الصيدلية)">
+        <input type="text" id="dropoffAddress" placeholder="مكان تسليم الطلب (عنوانك)">
+        <input type="number" id="orderPrice" placeholder="السعر المقترح (ج.م)">
+        <button class="btn btn-primary" onclick="createCustomerOrder()">إرسال الطلب</button>
+        <button class="btn btn-outline" onclick="goToMain()">إلغاء</button>
     </div>
-</div>
-
-<!-- ========== شاشة الزبون ========== -->
-<div id="customerScreen" class="app-container hidden">
-    <div class="header"><i class="fas fa-user"></i> طلباتي</div>
-    <div class="sub-header">
-        <span id="customerName">مرحباً</span>
-        <button class="btn btn-outline" onclick="logout()" style="width:auto;"><i class="fas fa-sign-out-alt"></i></button>
-    </div>
-    <button class="btn btn-primary" onclick="showNewOrder()"><i class="fas fa-plus-circle"></i> طلب توصيل جديد</button>
-    <div id="customerOrdersList"></div>
 </div>
 
 <!-- ========== شاشة السائق ========== -->
@@ -167,23 +146,6 @@
     <div id="adminOrdersList"></div>
 </div>
 
-<!-- ========== نافذة طلب جديد ========== -->
-<div id="newOrderModal" class="modal hidden">
-    <div class="modal-content">
-        <h3><i class="fas fa-shopping-bag"></i> طلب توصيل</h3>
-        <input type="text" id="pickupAddress" placeholder="مكان الطلب (المطعم/الصيدلية)">
-        <input type="text" id="dropoffAddress" placeholder="مكان تسليم الطلب (عنوان العميل)">
-        <input type="number" id="orderPrice" placeholder="السعر المقترح (ج.م)">
-        <button class="btn btn-primary" onclick="createOrder()">إرسال</button>
-        <button class="btn btn-outline" onclick="closeNewOrder()">إلغاء</button>
-    </div>
-</div>
-
-<!-- ========== نافذة تفاصيل طلب للمدير ========== -->
-<div id="adminOrderDetailModal" class="modal hidden">
-    <div class="modal-content" id="adminOrderDetailContent"></div>
-</div>
-
 <!-- ========== نافذة الدردشة ========== -->
 <div id="chatModal" class="modal hidden">
     <div class="modal-content">
@@ -195,9 +157,13 @@
     </div>
 </div>
 
+<!-- ========== نافذة تفاصيل طلب للمدير ========== -->
+<div id="adminOrderDetailModal" class="modal hidden">
+    <div class="modal-content" id="adminOrderDetailContent"></div>
+</div>
+
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -211,179 +177,106 @@
     };
 
     const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
     const db = getFirestore(app);
 
-    let currentUser = null;
-    let userData = null;
+    let currentUser = null; // { name, username, role } بعد تسجيل الدخول
     let currentOrderId = null;
 
-    // ---- reCAPTCHA callbacks ----
-    window.onLoginCaptchaSuccess = () => {
-        document.getElementById('loginBtn').disabled = false;
-    };
-    window.onLoginCaptchaExpired = () => {
-        document.getElementById('loginBtn').disabled = true;
-        grecaptcha.reset();
-    };
-
-    window.onRegCaptchaSuccess = () => {
-        document.getElementById('regBtn').disabled = false;
-    };
-    window.onRegCaptchaExpired = () => {
-        document.getElementById('regBtn').disabled = true;
-        grecaptcha.reset();
-    };
-
-    window.goToRegister = () => {
-        document.getElementById('loginScreen').classList.add('hidden');
-        document.getElementById('registerScreen').classList.remove('hidden');
-        if (typeof grecaptcha !== 'undefined') {
-            grecaptcha.reset();
-            document.getElementById('regBtn').disabled = true;
-        }
-    };
-
-    window.goToLogin = () => {
-        document.getElementById('registerScreen').classList.add('hidden');
-        document.getElementById('loginScreen').classList.remove('hidden');
-        if (typeof grecaptcha !== 'undefined') {
-            grecaptcha.reset();
-            document.getElementById('loginBtn').disabled = true;
-        }
-    };
-
-    window.login = async () => {
-        const email = document.getElementById('email').value.trim();
-        const pass = document.getElementById('password').value;
-        try {
-            await signInWithEmailAndPassword(auth, email, pass);
-            document.getElementById('loginError').innerText = '';
-        } catch (e) {
-            document.getElementById('loginError').innerText = "خطأ: " + e.message;
-        }
-    };
-
-    window.register = async () => {
-        const email = document.getElementById('regEmail').value.trim();
-        const pass = document.getElementById('regPassword').value;
-        const name = document.getElementById('regName').value.trim();
-        const role = document.getElementById('regRole').value;
-        if (!name) { document.getElementById('regError').innerText = 'الاسم مطلوب'; return; }
-        try {
-            const cred = await createUserWithEmailAndPassword(auth, email, pass);
-            await addDoc(collection(db, "users"), {
-                uid: cred.user.uid,
-                email: email,
-                name: name,
-                role: role
-            });
-            document.getElementById('regError').innerText = '';
-            goToLogin();
-        } catch (e) {
-            document.getElementById('regError').innerText = "خطأ: " + e.message;
-        }
-    };
-
-    window.logout = () => signOut(auth);
-
-    onAuthStateChanged(auth, async (user) => {
-        if (user) {
-            currentUser = user;
-            const q = query(collection(db, "users"), where("uid", "==", user.uid));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                userData = snap.docs[0].data();
-                loadUI();
-            } else {
-                await addDoc(collection(db, "users"), {
-                    uid: user.uid,
-                    email: user.email,
-                    name: user.email.split('@')[0],
-                    role: 'customer'
-                });
-                location.reload();
-            }
-        } else {
-            currentUser = null;
-            userData = null;
-            showScreen('loginScreen');
-        }
-    });
-
+    // ---------- التنقل بين الشاشات ----------
     function showScreen(id) {
         document.querySelectorAll('.app-container, .modal').forEach(el => el.classList.add('hidden'));
         const screen = document.getElementById(id);
         if (screen) screen.classList.remove('hidden');
     }
 
-    function loadUI() {
-        if (userData.role === 'customer') {
-            document.getElementById('customerName').innerText = userData.name || 'زبون';
-            showScreen('customerScreen');
-            listenCustomerOrders();
-        } else if (userData.role === 'driver') {
-            document.getElementById('driverName').innerText = userData.name || 'سائق';
+    window.goToMain = () => showScreen('mainScreen');
+    window.showLoginForm = () => showScreen('loginScreen');
+    window.showCustomerOrderForm = () => {
+        document.getElementById('custName').value = '';
+        document.getElementById('custPhone').value = '';
+        document.getElementById('pickupAddress').value = '';
+        document.getElementById('dropoffAddress').value = '';
+        document.getElementById('orderPrice').value = '';
+        showScreen('customerOrderScreen');
+    };
+
+    window.logout = () => {
+        currentUser = null;
+        goToMain();
+    };
+
+    // ---------- تسجيل الدخول للسائقين والإدارة ----------
+    window.login = async () => {
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+        if (!username || !password) {
+            document.getElementById('loginError').innerText = 'يرجى ملء جميع الحقول';
+            return;
+        }
+        try {
+            const q = query(collection(db, "users"), where("username", "==", username), where("password", "==", password));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const userData = snap.docs[0].data();
+                currentUser = {
+                    name: userData.name,
+                    username: userData.username,
+                    role: userData.role
+                };
+                document.getElementById('loginError').innerText = '';
+                loadUIAfterLogin();
+            } else {
+                document.getElementById('loginError').innerText = 'اسم المستخدم أو كلمة المرور خطأ';
+            }
+        } catch (e) {
+            document.getElementById('loginError').innerText = 'خطأ: ' + e.message;
+        }
+    };
+
+    function loadUIAfterLogin() {
+        if (currentUser.role === 'driver') {
+            document.getElementById('driverName').innerText = currentUser.name || 'سائق';
             showScreen('driverScreen');
             listenDriverOrders();
-        } else if (userData.role === 'admin') {
+        } else if (currentUser.role === 'admin') {
             showScreen('adminScreen');
             listenAdmin();
+        } else {
+            // دور غير معروف – ارجع للرئيسية
+            currentUser = null;
+            goToMain();
         }
     }
 
-    // ---------- الزبون ----------
-    window.showNewOrder = () => document.getElementById('newOrderModal').classList.remove('hidden');
-    window.closeNewOrder = () => document.getElementById('newOrderModal').classList.add('hidden');
-
-    window.createOrder = async () => {
+    // ---------- إنشاء طلب من الزبون (بدون تسجيل) ----------
+    window.createCustomerOrder = async () => {
+        const name = document.getElementById('custName').value.trim();
+        const phone = document.getElementById('custPhone').value.trim();
         const pickup = document.getElementById('pickupAddress').value.trim();
         const dropoff = document.getElementById('dropoffAddress').value.trim();
         const price = Number(document.getElementById('orderPrice').value);
-        if (!pickup || !dropoff || !price) return;
+        if (!name || !phone || !pickup || !dropoff || !price) {
+            alert('يرجى ملء جميع الحقول');
+            return;
+        }
         await addDoc(collection(db, "orders"), {
-            customerId: currentUser.uid,
-            customerEmail: currentUser.email,
-            customerName: userData.name,
-            pickup, dropoff, price,
+            customerName: name,
+            customerPhone: phone,
+            pickup,
+            dropoff,
+            price,
             status: "pending",
             driverId: null,
             counterPrice: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
-        closeNewOrder();
+        alert('تم إرسال الطلب بنجاح!');
+        goToMain();
     };
 
-    function listenCustomerOrders() {
-        const q = query(collection(db, "orders"), where("customerId", "==", currentUser.uid), orderBy("createdAt", "desc"));
-        onSnapshot(q, snap => {
-            let html = '';
-            snap.forEach(docSnap => {
-                const o = docSnap.data();
-                const id = docSnap.id;
-                html += `<div class="card">
-                    <b>${o.pickup} → ${o.dropoff}</b><br>
-                    السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
-                if (o.status === 'negotiating' && o.counterPrice) {
-                    html += `<span style="color:red;">عرض مضاد: ${o.counterPrice} ج.م</span>
-                        <button class="btn btn-success" onclick="acceptCounter('${id}')">قبول</button>
-                        <button class="btn btn-danger" onclick="rejectCounter('${id}')">رفض</button>`;
-                }
-                if (o.status === 'pending') {
-                    html += `<button class="btn btn-outline-danger" onclick="cancelOrder('${id}')">إلغاء</button>`;
-                }
-                html += `<button class="btn btn-outline" onclick="openChat('${id}')"><i class="fas fa-comment"></i> محادثة</button></div>`;
-            });
-            document.getElementById('customerOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
-        });
-    }
-
-    window.cancelOrder = async (orderId) => {
-        await updateDoc(doc(db, "orders", orderId), { status: "cancelled", updatedAt: serverTimestamp() });
-    };
-
-    // ---------- السائق ----------
+    // ---------- عرض طلبات الزبون (غير مستخدم هنا، لكن يمكن إضافته) ----------
+    // ---------- شاشة السائق ----------
     function listenDriverOrders() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         onSnapshot(q, snap => {
@@ -391,9 +284,11 @@
             snap.forEach(docSnap => {
                 const o = docSnap.data();
                 const id = docSnap.id;
-                if (o.driverId && o.driverId !== currentUser.uid) return;
+                // السائق يرى الطلبات المعلقة، أو طلباته هو
+                if (o.driverId && o.driverId !== currentUser.username) return;
                 html += `<div class="card">
                     <b>${o.pickup} → ${o.dropoff}</b><br>
+                    الزبون: ${o.customerName} (${o.customerPhone})<br>
                     السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
                 if (o.status === 'pending') {
                     html += `<input type="number" id="offerPrice${id}" placeholder="عرض سعرك" style="width:60%;">
@@ -401,14 +296,14 @@
                         <button class="btn btn-success" onclick="acceptOrderDirect('${id}')">قبول مباشر</button>`;
                 } else if (o.status === 'negotiating' && o.counterPrice) {
                     html += `عرضي: ${o.counterPrice} ج.م (بإنتظار العميل)`;
-                } else if (o.status === 'accepted' && o.driverId === currentUser.uid) {
+                } else if (o.status === 'accepted' && o.driverId === currentUser.username) {
                     html += `<button class="btn btn-primary" onclick="updateOrderStatus('${id}', 'picked_up')">تم الاستلام</button>`;
-                } else if (o.status === 'picked_up' && o.driverId === currentUser.uid) {
+                } else if (o.status === 'picked_up' && o.driverId === currentUser.username) {
                     html += `<button class="btn btn-success" onclick="updateOrderStatus('${id}', 'delivered')">تم التسليم</button>`;
                 }
                 html += `<button class="btn btn-outline" onclick="openChat('${id}')">محادثة</button></div>`;
             });
-            document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+            document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات حالياً.</p>';
         });
     }
 
@@ -418,16 +313,16 @@
         await updateDoc(doc(db, "orders", orderId), {
             status: "negotiating",
             counterPrice: newPrice,
-            counterBy: currentUser.uid,
+            counterBy: currentUser.username,
             updatedAt: serverTimestamp()
         });
     };
 
     window.acceptOrderDirect = async (orderId) => {
         await updateDoc(doc(db, "orders", orderId), {
-            driverId: currentUser.uid,
-            driverName: userData.name,
-            driverEmail: currentUser.email,
+            driverId: currentUser.username,
+            driverName: currentUser.name,
+            driverPhone: currentUser.phone || '', // يمكن إضافة رقم للهاتف في بيانات المستخدم
             status: "accepted",
             updatedAt: serverTimestamp()
         });
@@ -446,8 +341,8 @@
             const customerStats = {};
             snap.forEach(doc => {
                 const o = doc.data();
-                if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName]||0)+1;
-                if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName]||0)+1;
+                if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName] || 0) + 1;
+                if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName] || 0) + 1;
             });
             reportHtml += '<div class="card"><h3><i class="fas fa-users"></i> السائقين</h3>';
             for (const [name, count] of Object.entries(driverStats)) {
@@ -483,12 +378,12 @@
         const o = docSnap.data();
         const content = `
             <h3>تفاصيل الطلب</h3>
-            <p><b>الزبون:</b> ${o.customerName} (${o.customerEmail})</p>
+            <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
             <p><b>مكان الطلب:</b> ${o.pickup}</p>
             <p><b>مكان التسليم:</b> ${o.dropoff}</p>
             <p><b>السعر:</b> ${o.price} ج.م</p>
             <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
-            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverEmail || ''})</p>
+            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
             <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
             <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
         `;
@@ -511,9 +406,9 @@
             let html = '';
             snap.forEach(doc => {
                 const m = doc.data();
-                const isMine = m.senderId === currentUser.uid;
+                const isMine = currentUser && m.senderId === currentUser.username;
                 html += `<div class="chat-msg ${isMine ? 'msg-mine' : ''}">
-                    <span class="msg-sender">${m.senderName || m.senderEmail}:</span> ${m.text}
+                    <span class="msg-sender">${m.senderName}:</span> ${m.text}
                 </div>`;
             });
             document.getElementById('chatMessages').innerHTML = html;
@@ -523,11 +418,10 @@
 
     window.sendMessage = async () => {
         const text = document.getElementById('chatInput').value.trim();
-        if (!text || !currentOrderId) return;
+        if (!text || !currentOrderId || !currentUser) return;
         await addDoc(collection(db, "orders", currentOrderId, "messages"), {
-            senderId: currentUser.uid,
-            senderEmail: currentUser.email,
-            senderName: userData?.name || '',
+            senderId: currentUser.username,
+            senderName: currentUser.name,
             text,
             timestamp: serverTimestamp()
         });
@@ -542,7 +436,10 @@
         return map[status] || status;
     }
 
-    // ---- Service Worker ----
+    // بدء التطبيق
+    goToMain();
+
+    // Service Worker
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
