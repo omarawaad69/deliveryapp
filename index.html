@@ -100,6 +100,7 @@
     </div>
     <div class="card">
         <button class="btn btn-primary" onclick="showCustomerOrderForm()"><i class="fas fa-shopping-bag"></i> طلب توصيل جديد</button>
+        <button class="btn btn-outline" onclick="showTrackForm()"><i class="fas fa-search-location"></i> متابعة طلباتي</button>
         <button class="btn btn-outline" onclick="showLoginForm()"><i class="fas fa-sign-in-alt"></i> دخول السائقين والإدارة</button>
     </div>
 </div>
@@ -121,13 +122,24 @@
     <div class="header"><i class="fas fa-user"></i> طلب جديد</div>
     <div class="card">
         <input type="text" id="custName" placeholder="اسمك الكامل">
-        <input type="tel" id="custPhone" placeholder="رقم الهاتف">
+        <input type="tel" id="custPhone" placeholder="رقم الهاتف (مهم لتتبع الطلب)">
         <input type="text" id="pickupAddress" placeholder="مكان الطلب (المطعم/الصيدلية)">
         <input type="text" id="dropoffAddress" placeholder="مكان تسليم الطلب (عنوانك)">
         <input type="number" id="orderPrice" placeholder="السعر المقترح (ج.م)">
         <button class="btn btn-primary" onclick="createCustomerOrder()">إرسال الطلب</button>
         <button class="btn btn-outline" onclick="goToMain()">إلغاء</button>
     </div>
+</div>
+
+<!-- ========== شاشة متابعة الطلبات للزبون ========== -->
+<div id="trackScreen" class="app-container hidden">
+    <div class="header"><i class="fas fa-list-alt"></i> متابعة طلباتي</div>
+    <div class="card">
+        <input type="tel" id="trackPhone" placeholder="أدخل رقم هاتفك الذي استخدمته في الطلب">
+        <button class="btn btn-primary" onclick="loadCustomerOrdersByPhone()">عرض الطلبات</button>
+    </div>
+    <div id="customerOrdersList"></div>
+    <button class="btn btn-outline" onclick="goToMain()">رجوع للرئيسية</button>
 </div>
 
 <!-- ========== شاشة السائق ========== -->
@@ -209,7 +221,7 @@
     let currentUser = null; // { name, username, role, phone, id }
     let currentOrderId = null;
 
-    // ---------- التنقل بين الشاشات ----------
+    // ---------- التنقل ----------
     function showScreen(id) {
         document.querySelectorAll('.app-container, .modal').forEach(el => el.classList.add('hidden'));
         const screen = document.getElementById(id);
@@ -225,6 +237,11 @@
         document.getElementById('dropoffAddress').value = '';
         document.getElementById('orderPrice').value = '';
         showScreen('customerOrderScreen');
+    };
+    window.showTrackForm = () => {
+        document.getElementById('trackPhone').value = '';
+        document.getElementById('customerOrdersList').innerHTML = '';
+        showScreen('trackScreen');
     };
 
     window.logout = () => {
@@ -293,8 +310,130 @@
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
         });
-        alert('تم إرسال الطلب بنجاح!');
+        alert('تم إرسال الطلب بنجاح! تابع طلبك من خلال "متابعة طلباتي" وأدخل رقم هاتفك.');
         goToMain();
+    };
+
+    // ---------- شاشة تتبع الزبون ----------
+    window.loadCustomerOrdersByPhone = async () => {
+        const phone = document.getElementById('trackPhone').value.trim();
+        if (!phone) { alert('أدخل رقم الهاتف'); return; }
+        const q = query(collection(db, "orders"), where("customerPhone", "==", phone), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        let html = '';
+        snap.forEach(docSnap => {
+            const o = docSnap.data();
+            const id = docSnap.id;
+            html += `<div class="card">
+                <b>${o.pickup} ← ${o.dropoff}</b><br>
+                السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>
+                السائق: ${o.driverName || 'لم يعين بعد'}`;
+            if (o.status === 'negotiating' && o.counterPrice) {
+                html += `<br><span style="color:red;">عرض سعر جديد: ${o.counterPrice} ج.م</span>
+                    <button class="btn btn-success btn-sm" onclick="customerAcceptCounter('${id}')">قبول</button>
+                    <button class="btn btn-danger btn-sm" onclick="customerRejectCounter('${id}')">رفض</button>`;
+            }
+            if (o.status === 'pending') {
+                html += `<button class="btn btn-outline-danger btn-sm" onclick="customerCancelOrder('${id}')">إلغاء الطلب</button>`;
+            }
+            if (o.status !== 'delivered' && o.status !== 'cancelled') {
+                html += `<button class="btn btn-outline btn-sm" onclick="customerOpenChat('${id}')"><i class="fas fa-comment"></i> دردشة</button>`;
+            }
+            html += `</div>`;
+        });
+        document.getElementById('customerOrdersList').innerHTML = html || '<p>لا توجد طلبات بهذا الرقم.</p>';
+    };
+
+    window.customerAcceptCounter = async (orderId) => {
+        // جلب السعر المعروض وتطبيقه، ثم تعيين حالة accepted مع إسناد الطلب للسائق الذي قدم العرض
+        const snap = await getDoc(doc(db, "orders", orderId));
+        if (!snap.exists()) return;
+        const data = snap.data();
+        const newPrice = data.counterPrice;
+        const counterBy = data.counterBy; // اسم المستخدم للسائق الذي قدم العرض
+        // البحث عن بيانات السائق لتعيين driverId, driverName, driverPhone
+        const driverQ = query(collection(db, "users"), where("username", "==", counterBy));
+        const driverSnap = await getDocs(driverQ);
+        if (!driverSnap.empty) {
+            const driverData = driverSnap.docs[0].data();
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "accepted",
+                price: newPrice,
+                driverId: driverData.username,
+                driverName: driverData.name,
+                driverPhone: driverData.phone || '',
+                counterPrice: null,
+                counterBy: null,
+                updatedAt: serverTimestamp()
+            });
+        } else {
+            // إذا لم نجد السائق، فقط نطبق السعر ونحول إلى مقبول دون سائق
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "accepted",
+                price: newPrice,
+                counterPrice: null,
+                counterBy: null,
+                updatedAt: serverTimestamp()
+            });
+        }
+        loadCustomerOrdersByPhone(); // تحديث القائمة
+    };
+
+    window.customerRejectCounter = async (orderId) => {
+        await updateDoc(doc(db, "orders", orderId), {
+            status: "pending",
+            counterPrice: null,
+            counterBy: null,
+            updatedAt: serverTimestamp()
+        });
+        loadCustomerOrdersByPhone();
+    };
+
+    window.customerCancelOrder = async (orderId) => {
+        if (confirm('هل تريد إلغاء هذا الطلب؟')) {
+            await updateDoc(doc(db, "orders", orderId), { status: "cancelled", updatedAt: serverTimestamp() });
+            loadCustomerOrdersByPhone();
+        }
+    };
+
+    window.customerOpenChat = (orderId) => {
+        currentOrderId = orderId;
+        // للزبون لا يوجد currentUser مسجل، نمرر معلومات وهمية للدردشة
+        // لكننا نحتاج إلى معرف هوية المرسل. سنستخدم "customer" كمعرف مع الاسم ورقم الهاتف من الطلب.
+        // نسترجع بيانات الطلب لمعرفة اسم الزبون ورقمه، ونحفظها مؤقتاً في متغيرات عامة.
+        getDoc(doc(db, "orders", orderId)).then(snap => {
+            if (snap.exists()) {
+                const data = snap.data();
+                // نخزن بيانات مؤقتة للجلسة
+                window.tempCustomer = { name: data.customerName, phone: data.customerPhone };
+                document.getElementById('chatModal').classList.remove('hidden');
+                listenChat(orderId, false); // false يعني ليس مستخدم مسجل
+            }
+        });
+    };
+
+    // تعديل sendMessage للعمل مع الزبون
+    window.sendMessage = async () => {
+        const text = document.getElementById('chatInput').value.trim();
+        if (!text || !currentOrderId) return;
+        let senderId, senderName;
+        if (currentUser) {
+            senderId = currentUser.username;
+            senderName = currentUser.name;
+        } else if (window.tempCustomer) {
+            senderId = window.tempCustomer.phone || 'customer';
+            senderName = window.tempCustomer.name || 'زبون';
+        } else {
+            alert('لا يمكن تحديد المرسل');
+            return;
+        }
+        await addDoc(collection(db, "orders", currentOrderId, "messages"), {
+            senderId,
+            senderName,
+            text,
+            timestamp: serverTimestamp()
+        });
+        document.getElementById('chatInput').value = '';
     };
 
     // ---------- السائق ----------
@@ -406,7 +545,7 @@
                 status: "cancelled",
                 updatedAt: serverTimestamp()
             });
-            loadAllOrders(); // تحديث القائمة
+            loadAllOrders();
         }
     };
 
@@ -509,7 +648,7 @@
     // --- التقارير ---
     function listenAdminReports() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        onSnapshot(q, snap => {}); // مجرد استماع
+        onSnapshot(q, snap => {});
     }
 
     window.loadAdminReports = async () => {
@@ -561,17 +700,22 @@
     window.openChat = (orderId) => {
         currentOrderId = orderId;
         document.getElementById('chatModal').classList.remove('hidden');
-        listenChat(orderId);
+        listenChat(orderId, true);
     };
     window.closeChat = () => { document.getElementById('chatModal').classList.add('hidden'); currentOrderId = null; };
 
-    function listenChat(orderId) {
+    function listenChat(orderId, isLoggedIn) {
         const q = query(collection(db, "orders", orderId, "messages"), orderBy("timestamp"));
         onSnapshot(q, snap => {
             let html = '';
             snap.forEach(doc => {
                 const m = doc.data();
-                const isMine = currentUser && m.senderId === currentUser.username;
+                let isMine = false;
+                if (isLoggedIn && currentUser) {
+                    isMine = m.senderId === currentUser.username;
+                } else if (window.tempCustomer) {
+                    isMine = m.senderId === window.tempCustomer.phone || m.senderId === 'customer';
+                }
                 html += `<div class="chat-msg ${isMine ? 'msg-mine' : ''}">
                     <span class="msg-sender">${m.senderName}:</span> ${m.text}
                 </div>`;
@@ -581,17 +725,7 @@
         });
     }
 
-    window.sendMessage = async () => {
-        const text = document.getElementById('chatInput').value.trim();
-        if (!text || !currentOrderId || !currentUser) return;
-        await addDoc(collection(db, "orders", currentOrderId, "messages"), {
-            senderId: currentUser.username,
-            senderName: currentUser.name,
-            text,
-            timestamp: serverTimestamp()
-        });
-        document.getElementById('chatInput').value = '';
-    };
+    // (sendMessage معرف فوق)
 
     function translateStatus(status) {
         const map = {
