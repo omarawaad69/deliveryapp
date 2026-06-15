@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تطبيق التوصيل</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f2f2f2; }
+        .hidden { display: none !important; }
+        .container { max-width: 500px; margin: 0 auto; padding: 16px; }
+        .btn { padding: 12px 24px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; width: 100%; margin: 4px 0; }
+        .btn-primary { background: #2e7d32; color: white; }
+        .btn-danger { background: #c62828; color: white; }
+        .btn-outline { background: transparent; border: 1px solid #2e7d32; color: #2e7d32; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border-radius: 12px; border: 1px solid #ccc; font-size: 16px; }
+        .card { background: white; border-radius: 16px; padding: 16px; margin: 12px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background: #1a1a2e; color: #e0c068; padding: 16px; text-align: center; font-size: 1.5rem; font-weight: bold; position: sticky; top: 0; }
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 100; }
+        .modal-content { background: white; width: 90%; max-width: 400px; border-radius: 20px; padding: 20px; max-height: 80vh; overflow-y: auto; }
+        .chat-box { max-height: 200px; overflow-y: auto; background: #f9f9f9; border-radius: 8px; padding: 8px; margin: 8px 0; }
+        .chat-msg { margin-bottom: 4px; }
+        .msg-sender { font-weight: bold; }
+        .badge { background: gold; color: black; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <!-- تسجيل الدخول -->
+    <div id="loginScreen" class="container">
+        <h2 style="text-align:center;">تسجيل الدخول</h2>
+        <input type="email" id="email" placeholder="البريد الإلكتروني">
+        <input type="password" id="password" placeholder="كلمة السر">
+        <button class="btn btn-primary" onclick="login()">دخول</button>
+        <button class="btn btn-outline" onclick="showRegister()">إنشاء حساب جديد</button>
+        <div id="loginError" style="color: red; text-align: center;"></div>
+    </div>
+
+    <!-- إنشاء حساب -->
+    <div id="registerScreen" class="container hidden">
+        <h2 style="text-align:center;">إنشاء حساب</h2>
+        <input type="email" id="regEmail" placeholder="البريد الإلكتروني">
+        <input type="password" id="regPassword" placeholder="كلمة السر (6 أحرف على الأقل)">
+        <select id="role"><option value="customer">زبون</option><option value="driver">سائق</option></select>
+        <button class="btn btn-primary" onclick="register()">تسجيل</button>
+        <button class="btn btn-outline" onclick="showLogin()">العودة</button>
+        <div id="regError" style="color: red; text-align: center;"></div>
+    </div>
+
+    <!-- شاشة الزبون -->
+    <div id="customerScreen" class="container hidden">
+        <div class="header">📦 طلباتي</div>
+        <button class="btn btn-primary" onclick="showNewOrder()">➕ طلب توصيل جديد</button>
+        <div id="customerOrdersList"></div>
+        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+    </div>
+
+    <!-- شاشة السائق -->
+    <div id="driverScreen" class="container hidden">
+        <div class="header">🏍️ الطلبات المتاحة</div>
+        <div id="driverOrdersList"></div>
+        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+    </div>
+
+    <!-- شاشة المدير -->
+    <div id="adminScreen" class="container hidden">
+        <div class="header">📊 تقارير</div>
+        <div id="adminReports"></div>
+        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+    </div>
+
+    <!-- نافذة طلب جديد -->
+    <div id="newOrderModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>طلب توصيل جديد</h3>
+            <input type="text" id="pickup" placeholder="مكان الاستلام (اسم المحل)">
+            <input type="text" id="dropoff" placeholder="مكان التسليم">
+            <input type="number" id="price" placeholder="السعر المقترح (ج.م)">
+            <button class="btn btn-primary" onclick="createOrder()">إرسال الطلب</button>
+            <button class="btn btn-outline" onclick="closeNewOrder()">إلغاء</button>
+        </div>
+    </div>
+
+    <!-- نافذة الدردشة -->
+    <div id="chatModal" class="modal hidden">
+        <div class="modal-content">
+            <h3>محادثة الطلب</h3>
+            <div class="chat-box" id="chatMessages"></div>
+            <input type="text" id="chatInput" placeholder="اكتب رسالة...">
+            <button class="btn btn-primary" onclick="sendMessage()">إرسال</button>
+            <button class="btn btn-outline" onclick="closeChat()">إغلاق</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // إعدادات Firebase الخاصة بك
+        const firebaseConfig = {
+            apiKey: "AIzaSyBbSoW0Rn56U4sgH2A1USfdAhY5gdIL8v4",
+            authDomain: "delivery-app-f4af2.firebaseapp.com",
+            projectId: "delivery-app-f4af2",
+            storageBucket: "delivery-app-f4af2.firebasestorage.app",
+            messagingSenderId: "490159202619",
+            appId: "1:490159202619:web:7f30858e1d0d826fed971e",
+            measurementId: "G-MYBKR56TEQ"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let userRole = null;
+        let currentOrderId = null;
+
+        window.showRegister = () => {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('registerScreen').classList.remove('hidden');
+        };
+        window.showLogin = () => {
+            document.getElementById('registerScreen').classList.add('hidden');
+            document.getElementById('loginScreen').classList.remove('hidden');
+        };
+
+        window.login = async () => {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            try {
+                await signInWithEmailAndPassword(auth, email, pass);
+            } catch (e) {
+                document.getElementById('loginError').innerText = "خطأ: " + e.message;
+            }
+        };
+
+        window.register = async () => {
+            const email = document.getElementById('regEmail').value;
+            const pass = document.getElementById('regPassword').value;
+            const role = document.getElementById('role').value;
+            try {
+                const cred = await createUserWithEmailAndPassword(auth, email, pass);
+                await addDoc(collection(db, "users"), { uid: cred.user.uid, email, role });
+                showLogin();
+            } catch (e) {
+                document.getElementById('regError').innerText = "خطأ: " + e.message;
+            }
+        };
+
+        window.logout = () => signOut(auth);
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                const q = query(collection(db, "users"), where("uid", "==", user.uid));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    userRole = snap.docs[0].data().role;
+                    loadUI();
+                }
+            } else {
+                currentUser = null;
+                userRole = null;
+                showScreen('loginScreen');
+            }
+        });
+
+        function showScreen(id) {
+            document.querySelectorAll('.container, .modal').forEach(el => el.classList.add('hidden'));
+            document.getElementById(id).classList.remove('hidden');
+        }
+
+        function loadUI() {
+            if (userRole === 'customer') {
+                showScreen('customerScreen');
+                listenCustomerOrders();
+            } else if (userRole === 'driver') {
+                showScreen('driverScreen');
+                listenDriverOrders();
+            } else if (userRole === 'admin') {
+                showScreen('adminScreen');
+                listenAdmin();
+            }
+        }
+
+        window.showNewOrder = () => document.getElementById('newOrderModal').classList.remove('hidden');
+        window.closeNewOrder = () => document.getElementById('newOrderModal').classList.add('hidden');
+
+        window.createOrder = async () => {
+            const pickup = document.getElementById('pickup').value;
+            const dropoff = document.getElementById('dropoff').value;
+            const price = Number(document.getElementById('price').value);
+            if (!pickup || !dropoff || !price) return;
+            await addDoc(collection(db, "orders"), {
+                customerId: currentUser.uid,
+                customerEmail: currentUser.email,
+                pickup, dropoff, price,
+                status: "pending",
+                driverId: null,
+                counterPrice: null,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            closeNewOrder();
+        };
+
+        function listenCustomerOrders() {
+            const q = query(collection(db, "orders"), where("customerId", "==", currentUser.uid), orderBy("createdAt", "desc"));
+            onSnapshot(q, snap => {
+                let html = '';
+                snap.forEach(doc => {
+                    const o = doc.data();
+                    html += `<div class="card"><b>${o.pickup} ➔ ${o.dropoff}</b><br>السعر: ${o.price} ج.م | الحالة: <span class="badge">${o.status}</span><br>`;
+                    if (o.status === 'negotiating' && o.counterPrice) {
+                        html += `<span style="color:red;">عرض مضاد: ${o.counterPrice} ج.م</span>
+                            <button class="btn btn-primary" onclick="acceptCounter('${doc.id}')">قبول</button>
+                            <button class="btn btn-danger" onclick="rejectCounter('${doc.id}')">رفض</button>`;
+                    }
+                    html += `<button class="btn btn-outline" onclick="openChat('${doc.id}')">💬 محادثة</button></div>`;
+                });
+                document.getElementById('customerOrdersList').innerHTML = html || '<p>لا توجد طلبات.</p>';
+            });
+        }
+
+        function listenDriverOrders() {
+            const q = query(collection(db, "orders"), where("status", "in", ["pending", "negotiating"]), orderBy("createdAt", "desc"));
+            onSnapshot(q, snap => {
+                let html = '';
+                snap.forEach(doc => {
+                    const o = doc.data();
+                    html += `<div class="card"><b>${o.pickup} ➔ ${o.dropoff}</b><br>السعر: ${o.price} ج.م<br>`;
+                    if (o.status === 'pending') {
+                        html += `<input type="number" id="offerPrice${doc.id}" placeholder="عرض سعرك" style="width:60%;">
+                            <button class="btn btn-primary" onclick="makeCounterOffer('${doc.id}')">تقديم عرض</button>
+                            <button class="btn btn-primary" onclick="acceptOrderDirect('${doc.id}')">قبول مباشر</button>`;
+                    } else if (o.status === 'negotiating' && o.counterPrice) {
+                        html += `عرضي: ${o.counterPrice} ج.م (بإنتظار رد العميل)`;
+                    }
+                    html += `</div>`;
+                });
+                document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات حالياً.</p>';
+            });
+        }
+
+        window.makeCounterOffer = async (orderId) => {
+            const newPrice = Number(document.getElementById(`offerPrice${orderId}`).value);
+            if (!newPrice) return;
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "negotiating",
+                counterPrice: newPrice,
+                counterBy: currentUser.uid,
+                updatedAt: serverTimestamp()
+            });
+        };
+
+        window.acceptOrderDirect = async (orderId) => {
+            await updateDoc(doc(db, "orders", orderId), {
+                driverId: currentUser.uid,
+                driverEmail: currentUser.email,
+                status: "accepted",
+                updatedAt: serverTimestamp()
+            });
+        };
+
+        window.acceptCounter = async (orderId) => {
+            const snap = await getDocs(query(collection(db, "orders"), where("__name__", "==", orderId)));
+            if (!snap.empty) {
+                const data = snap.docs[0].data();
+                await updateDoc(doc(db, "orders", orderId), {
+                    price: data.counterPrice,
+                    status: "accepted",
+                    counterPrice: null,
+                    updatedAt: serverTimestamp()
+                });
+            }
+        };
+
+        window.rejectCounter = async (orderId) => {
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "pending",
+                counterPrice: null,
+                updatedAt: serverTimestamp()
+            });
+        };
+
+        window.openChat = (orderId) => {
+            currentOrderId = orderId;
+            document.getElementById('chatModal').classList.remove('hidden');
+            listenChat(orderId);
+        };
+        window.closeChat = () => {
+            document.getElementById('chatModal').classList.add('hidden');
+            currentOrderId = null;
+        };
+
+        function listenChat(orderId) {
+            const q = query(collection(db, "orders", orderId, "messages"), orderBy("timestamp"));
+            onSnapshot(q, snap => {
+                let html = '';
+                snap.forEach(doc => {
+                    const m = doc.data();
+                    html += `<div class="chat-msg"><span class="msg-sender">${m.senderEmail.split('@')[0]}:</span> ${m.text}</div>`;
+                });
+                document.getElementById('chatMessages').innerHTML = html;
+            });
+        }
+
+        window.sendMessage = async () => {
+            const text = document.getElementById('chatInput').value.trim();
+            if (!text || !currentOrderId) return;
+            await addDoc(collection(db, "orders", currentOrderId, "messages"), {
+                senderId: currentUser.uid,
+                senderEmail: currentUser.email,
+                text,
+                timestamp: serverTimestamp()
+            });
+            document.getElementById('chatInput').value = '';
+        };
+
+        function listenAdmin() {
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+            onSnapshot(q, snap => {
+                let html = '<h3>جميع الطلبات</h3>';
+                const driverCounts = {};
+                snap.forEach(doc => {
+                    const o = doc.data();
+                    html += `<p>${o.customerEmail}: ${o.pickup}→${o.dropoff} (${o.status})</p>`;
+                    if (o.driverEmail) driverCounts[o.driverEmail] = (driverCounts[o.driverEmail]||0)+1;
+                });
+                html += '<h3>السائقين</h3>';
+                for (const [email, count] of Object.entries(driverCounts)) {
+                    html += `<p>${email}: ${count} طلب</p>`;
+                }
+                document.getElementById('adminReports').innerHTML = html;
+            });
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>
