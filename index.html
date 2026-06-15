@@ -92,7 +92,7 @@
 </head>
 <body>
 
-<!-- ========== الشاشة الرئيسية ========== -->
+<!-- الشاشات كما هي في الكود السابق دون تغيير في الهيكل -->
 <div id="mainScreen" class="app-container">
     <div class="text-center" style="margin:40px 0;">
         <i class="fas fa-motorcycle" style="font-size:60px; color:var(--primary);"></i>
@@ -105,7 +105,6 @@
     </div>
 </div>
 
-<!-- ========== شاشة تسجيل الدخول ========== -->
 <div id="loginScreen" class="app-container hidden">
     <div class="card">
         <h3>تسجيل الدخول</h3>
@@ -117,7 +116,6 @@
     </div>
 </div>
 
-<!-- ========== شاشة طلب العميل ========== -->
 <div id="customerOrderScreen" class="app-container hidden">
     <div class="header"><i class="fas fa-user"></i> طلب جديد</div>
     <div class="card">
@@ -131,18 +129,17 @@
     </div>
 </div>
 
-<!-- ========== شاشة متابعة الطلبات للزبون ========== -->
 <div id="trackScreen" class="app-container hidden">
     <div class="header"><i class="fas fa-list-alt"></i> متابعة طلباتي</div>
     <div class="card">
         <input type="tel" id="trackPhone" placeholder="أدخل رقم هاتفك الذي استخدمته في الطلب">
         <button class="btn btn-primary" onclick="loadCustomerOrdersByPhone()">عرض الطلبات</button>
+        <div id="trackError" style="color:red; text-align:center;"></div>
     </div>
     <div id="customerOrdersList"></div>
     <button class="btn btn-outline" onclick="goToMain()">رجوع للرئيسية</button>
 </div>
 
-<!-- ========== شاشة السائق ========== -->
 <div id="driverScreen" class="app-container hidden">
     <div class="header"><i class="fas fa-motorcycle"></i> الطلبات</div>
     <div class="sub-header">
@@ -152,7 +149,6 @@
     <div id="driverOrdersList"></div>
 </div>
 
-<!-- ========== شاشة المدير ========== -->
 <div id="adminScreen" class="app-container hidden">
     <div class="header"><i class="fas fa-chart-bar"></i> لوحة التحكم</div>
     <div class="sub-header">
@@ -185,7 +181,6 @@
     </div>
 </div>
 
-<!-- ========== نافذة الدردشة ========== -->
 <div id="chatModal" class="modal hidden">
     <div class="modal-content">
         <h3><i class="fas fa-comments"></i> المحادثة</h3>
@@ -196,7 +191,6 @@
     </div>
 </div>
 
-<!-- ========== نافذة تفاصيل طلب ========== -->
 <div id="adminOrderDetailModal" class="modal hidden">
     <div class="modal-content" id="adminOrderDetailContent"></div>
 </div>
@@ -218,8 +212,9 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let currentUser = null; // { name, username, role, phone, id }
+    let currentUser = null;
     let currentOrderId = null;
+    window.tempCustomer = null; // لحفظ بيانات الزبون المؤقتة للدردشة
 
     // ---------- التنقل ----------
     function showScreen(id) {
@@ -241,6 +236,7 @@
     window.showTrackForm = () => {
         document.getElementById('trackPhone').value = '';
         document.getElementById('customerOrdersList').innerHTML = '';
+        document.getElementById('trackError').innerText = '';
         showScreen('trackScreen');
     };
 
@@ -257,30 +253,34 @@
             document.getElementById('loginError').innerText = 'يرجى ملء جميع الحقول';
             return;
         }
-        const q = query(collection(db, "users"), where("username", "==", username), where("password", "==", password));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-            const userData = snap.docs[0].data();
-            currentUser = {
-                id: snap.docs[0].id,
-                name: userData.name,
-                username: userData.username,
-                role: userData.role,
-                phone: userData.phone || ''
-            };
-            document.getElementById('loginError').innerText = '';
-            if (currentUser.role === 'driver') {
-                document.getElementById('driverName').innerText = currentUser.name || 'سائق';
-                showScreen('driverScreen');
-                listenDriverOrders();
-            } else if (currentUser.role === 'admin') {
-                showScreen('adminScreen');
-                showAdminTab('orders', document.querySelector('.tab.active'));
-                loadAllOrders();
-                listenAdminReports();
+        try {
+            const q = query(collection(db, "users"), where("username", "==", username), where("password", "==", password));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                const userData = snap.docs[0].data();
+                currentUser = {
+                    id: snap.docs[0].id,
+                    name: userData.name,
+                    username: userData.username,
+                    role: userData.role,
+                    phone: userData.phone || ''
+                };
+                document.getElementById('loginError').innerText = '';
+                if (currentUser.role === 'driver') {
+                    document.getElementById('driverName').innerText = currentUser.name || 'سائق';
+                    showScreen('driverScreen');
+                    listenDriverOrders();
+                } else if (currentUser.role === 'admin') {
+                    showScreen('adminScreen');
+                    showAdminTab('orders', document.querySelector('.tab.active'));
+                    loadAllOrders();
+                    listenAdminReports();
+                }
+            } else {
+                document.getElementById('loginError').innerText = 'اسم المستخدم أو كلمة المرور خطأ';
             }
-        } else {
-            document.getElementById('loginError').innerText = 'اسم المستخدم أو كلمة المرور خطأ';
+        } catch (e) {
+            document.getElementById('loginError').innerText = 'خطأ في تسجيل الدخول: ' + e.message;
         }
     };
 
@@ -295,145 +295,146 @@
             alert('يرجى ملء جميع الحقول');
             return;
         }
-        await addDoc(collection(db, "orders"), {
-            customerName: name,
-            customerPhone: phone,
-            pickup,
-            dropoff,
-            price,
-            status: "pending",
-            driverId: null,
-            driverName: null,
-            driverPhone: null,
-            counterPrice: null,
-            counterBy: null,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-        });
-        alert('تم إرسال الطلب بنجاح! تابع طلبك من خلال "متابعة طلباتي" وأدخل رقم هاتفك.');
-        goToMain();
+        try {
+            await addDoc(collection(db, "orders"), {
+                customerName: name,
+                customerPhone: phone,
+                pickup,
+                dropoff,
+                price,
+                status: "pending",
+                driverId: null,
+                driverName: null,
+                driverPhone: null,
+                counterPrice: null,
+                counterBy: null,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+            alert('تم إرسال الطلب بنجاح! تابع طلبك من خلال "متابعة طلباتي" وأدخل رقم هاتفك.');
+            goToMain();
+        } catch (e) {
+            alert('فشل في إرسال الطلب: ' + e.message);
+        }
     };
 
-    // ---------- شاشة تتبع الزبون ----------
+    // ---------- تتبع الزبون ----------
     window.loadCustomerOrdersByPhone = async () => {
         const phone = document.getElementById('trackPhone').value.trim();
-        if (!phone) { alert('أدخل رقم الهاتف'); return; }
-        const q = query(collection(db, "orders"), where("customerPhone", "==", phone), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        let html = '';
-        snap.forEach(docSnap => {
-            const o = docSnap.data();
-            const id = docSnap.id;
-            html += `<div class="card">
-                <b>${o.pickup} ← ${o.dropoff}</b><br>
-                السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>
-                السائق: ${o.driverName || 'لم يعين بعد'}`;
-            if (o.status === 'negotiating' && o.counterPrice) {
-                html += `<br><span style="color:red;">عرض سعر جديد: ${o.counterPrice} ج.م</span>
-                    <button class="btn btn-success btn-sm" onclick="customerAcceptCounter('${id}')">قبول</button>
-                    <button class="btn btn-danger btn-sm" onclick="customerRejectCounter('${id}')">رفض</button>`;
-            }
-            if (o.status === 'pending') {
-                html += `<button class="btn btn-outline-danger btn-sm" onclick="customerCancelOrder('${id}')">إلغاء الطلب</button>`;
-            }
-            if (o.status !== 'delivered' && o.status !== 'cancelled') {
-                html += `<button class="btn btn-outline btn-sm" onclick="customerOpenChat('${id}')"><i class="fas fa-comment"></i> دردشة</button>`;
-            }
-            html += `</div>`;
-        });
-        document.getElementById('customerOrdersList').innerHTML = html || '<p>لا توجد طلبات بهذا الرقم.</p>';
+        const errorDiv = document.getElementById('trackError');
+        errorDiv.innerText = '';
+        if (!phone) { errorDiv.innerText = 'أدخل رقم الهاتف'; return; }
+        try {
+            // لا نستخدم orderBy مع where، بل نجلب الكل ثم نرتب
+            const q = query(collection(db, "orders"), where("customerPhone", "==", phone));
+            const snap = await getDocs(q);
+            let orders = [];
+            snap.forEach(docSnap => {
+                orders.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            // ترتيب تنازلي حسب createdAt
+            orders.sort((a, b) => {
+                const timeA = a.createdAt?.seconds || 0;
+                const timeB = b.createdAt?.seconds || 0;
+                return timeB - timeA;
+            });
+
+            let html = '';
+            orders.forEach(o => {
+                const id = o.id;
+                html += `<div class="card">
+                    <b>${o.pickup} ← ${o.dropoff}</b><br>
+                    السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>
+                    السائق: ${o.driverName || 'لم يعين بعد'}`;
+                if (o.status === 'negotiating' && o.counterPrice) {
+                    html += `<br><span style="color:red;">عرض سعر جديد: ${o.counterPrice} ج.م</span>
+                        <button class="btn btn-success btn-sm" onclick="customerAcceptCounter('${id}')">قبول</button>
+                        <button class="btn btn-danger btn-sm" onclick="customerRejectCounter('${id}')">رفض</button>`;
+                }
+                if (o.status === 'pending') {
+                    html += `<button class="btn btn-outline-danger btn-sm" onclick="customerCancelOrder('${id}')">إلغاء الطلب</button>`;
+                }
+                if (o.status !== 'delivered' && o.status !== 'cancelled') {
+                    html += `<button class="btn btn-outline btn-sm" onclick="customerOpenChat('${id}')"><i class="fas fa-comment"></i> دردشة</button>`;
+                }
+                html += `</div>`;
+            });
+            document.getElementById('customerOrdersList').innerHTML = html || '<p>لا توجد طلبات بهذا الرقم.</p>';
+        } catch (e) {
+            errorDiv.innerText = 'خطأ في جلب الطلبات: ' + e.message;
+            console.error(e);
+        }
     };
 
     window.customerAcceptCounter = async (orderId) => {
-        // جلب السعر المعروض وتطبيقه، ثم تعيين حالة accepted مع إسناد الطلب للسائق الذي قدم العرض
-        const snap = await getDoc(doc(db, "orders", orderId));
-        if (!snap.exists()) return;
-        const data = snap.data();
-        const newPrice = data.counterPrice;
-        const counterBy = data.counterBy; // اسم المستخدم للسائق الذي قدم العرض
-        // البحث عن بيانات السائق لتعيين driverId, driverName, driverPhone
-        const driverQ = query(collection(db, "users"), where("username", "==", counterBy));
-        const driverSnap = await getDocs(driverQ);
-        if (!driverSnap.empty) {
-            const driverData = driverSnap.docs[0].data();
+        try {
+            const snap = await getDoc(doc(db, "orders", orderId));
+            if (!snap.exists()) return;
+            const data = snap.data();
+            const newPrice = data.counterPrice;
+            const counterBy = data.counterBy;
+            let driverUpdate = {};
+            if (counterBy) {
+                const driverQ = query(collection(db, "users"), where("username", "==", counterBy));
+                const driverSnap = await getDocs(driverQ);
+                if (!driverSnap.empty) {
+                    const driverData = driverSnap.docs[0].data();
+                    driverUpdate = {
+                        driverId: driverData.username,
+                        driverName: driverData.name,
+                        driverPhone: driverData.phone || ''
+                    };
+                }
+            }
             await updateDoc(doc(db, "orders", orderId), {
                 status: "accepted",
                 price: newPrice,
-                driverId: driverData.username,
-                driverName: driverData.name,
-                driverPhone: driverData.phone || '',
+                ...driverUpdate,
                 counterPrice: null,
                 counterBy: null,
                 updatedAt: serverTimestamp()
             });
-        } else {
-            // إذا لم نجد السائق، فقط نطبق السعر ونحول إلى مقبول دون سائق
-            await updateDoc(doc(db, "orders", orderId), {
-                status: "accepted",
-                price: newPrice,
-                counterPrice: null,
-                counterBy: null,
-                updatedAt: serverTimestamp()
-            });
+            loadCustomerOrdersByPhone();
+        } catch (e) {
+            alert('فشل قبول العرض: ' + e.message);
         }
-        loadCustomerOrdersByPhone(); // تحديث القائمة
     };
 
     window.customerRejectCounter = async (orderId) => {
-        await updateDoc(doc(db, "orders", orderId), {
-            status: "pending",
-            counterPrice: null,
-            counterBy: null,
-            updatedAt: serverTimestamp()
-        });
-        loadCustomerOrdersByPhone();
+        try {
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "pending",
+                counterPrice: null,
+                counterBy: null,
+                updatedAt: serverTimestamp()
+            });
+            loadCustomerOrdersByPhone();
+        } catch (e) {
+            alert('فشل رفض العرض: ' + e.message);
+        }
     };
 
     window.customerCancelOrder = async (orderId) => {
         if (confirm('هل تريد إلغاء هذا الطلب؟')) {
-            await updateDoc(doc(db, "orders", orderId), { status: "cancelled", updatedAt: serverTimestamp() });
-            loadCustomerOrdersByPhone();
+            try {
+                await updateDoc(doc(db, "orders", orderId), { status: "cancelled", updatedAt: serverTimestamp() });
+                loadCustomerOrdersByPhone();
+            } catch (e) {
+                alert('فشل إلغاء الطلب: ' + e.message);
+            }
         }
     };
 
     window.customerOpenChat = (orderId) => {
         currentOrderId = orderId;
-        // للزبون لا يوجد currentUser مسجل، نمرر معلومات وهمية للدردشة
-        // لكننا نحتاج إلى معرف هوية المرسل. سنستخدم "customer" كمعرف مع الاسم ورقم الهاتف من الطلب.
-        // نسترجع بيانات الطلب لمعرفة اسم الزبون ورقمه، ونحفظها مؤقتاً في متغيرات عامة.
         getDoc(doc(db, "orders", orderId)).then(snap => {
             if (snap.exists()) {
                 const data = snap.data();
-                // نخزن بيانات مؤقتة للجلسة
                 window.tempCustomer = { name: data.customerName, phone: data.customerPhone };
                 document.getElementById('chatModal').classList.remove('hidden');
-                listenChat(orderId, false); // false يعني ليس مستخدم مسجل
+                listenChat(orderId, false);
             }
-        });
-    };
-
-    // تعديل sendMessage للعمل مع الزبون
-    window.sendMessage = async () => {
-        const text = document.getElementById('chatInput').value.trim();
-        if (!text || !currentOrderId) return;
-        let senderId, senderName;
-        if (currentUser) {
-            senderId = currentUser.username;
-            senderName = currentUser.name;
-        } else if (window.tempCustomer) {
-            senderId = window.tempCustomer.phone || 'customer';
-            senderName = window.tempCustomer.name || 'زبون';
-        } else {
-            alert('لا يمكن تحديد المرسل');
-            return;
-        }
-        await addDoc(collection(db, "orders", currentOrderId, "messages"), {
-            senderId,
-            senderName,
-            text,
-            timestamp: serverTimestamp()
-        });
-        document.getElementById('chatInput').value = '';
+        }).catch(e => alert('خطأ: ' + e.message));
     };
 
     // ---------- السائق ----------
@@ -466,32 +467,48 @@
                 html += `<button class="btn btn-outline" onclick="openChat('${id}')">محادثة</button></div>`;
             });
             document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات حالياً.</p>';
+        }, error => {
+            console.error("خطأ في استماع طلبات السائق:", error);
         });
     }
 
     window.makeCounterOffer = async (orderId) => {
-        const newPrice = Number(document.getElementById(`offerPrice${orderId}`).value);
-        if (!newPrice) return;
-        await updateDoc(doc(db, "orders", orderId), {
-            status: "negotiating",
-            counterPrice: newPrice,
-            counterBy: currentUser.username,
-            updatedAt: serverTimestamp()
-        });
+        const priceEl = document.getElementById(`offerPrice${orderId}`);
+        if (!priceEl) return;
+        const newPrice = Number(priceEl.value);
+        if (!newPrice) { alert('أدخل سعراً صحيحاً'); return; }
+        try {
+            await updateDoc(doc(db, "orders", orderId), {
+                status: "negotiating",
+                counterPrice: newPrice,
+                counterBy: currentUser.username,
+                updatedAt: serverTimestamp()
+            });
+        } catch (e) {
+            alert('فشل تقديم العرض: ' + e.message);
+        }
     };
 
     window.acceptOrderDirect = async (orderId) => {
-        await updateDoc(doc(db, "orders", orderId), {
-            driverId: currentUser.username,
-            driverName: currentUser.name,
-            driverPhone: currentUser.phone || '',
-            status: "accepted",
-            updatedAt: serverTimestamp()
-        });
+        try {
+            await updateDoc(doc(db, "orders", orderId), {
+                driverId: currentUser.username,
+                driverName: currentUser.name,
+                driverPhone: currentUser.phone || '',
+                status: "accepted",
+                updatedAt: serverTimestamp()
+            });
+        } catch (e) {
+            alert('فشل قبول الطلب: ' + e.message);
+        }
     };
 
     window.updateOrderStatus = async (orderId, newStatus) => {
-        await updateDoc(doc(db, "orders", orderId), { status: newStatus, updatedAt: serverTimestamp() });
+        try {
+            await updateDoc(doc(db, "orders", orderId), { status: newStatus, updatedAt: serverTimestamp() });
+        } catch (e) {
+            alert('فشل تحديث الحالة: ' + e.message);
+        }
     };
 
     // ---------- المدير ----------
@@ -514,97 +531,116 @@
     };
 
     window.loadAllOrders = async () => {
-        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        let html = '';
-        snap.forEach(docSnap => {
-            const o = docSnap.data();
-            const id = docSnap.id;
-            html += `<div class="card">
-                <b>${o.pickup} ← ${o.dropoff}</b><br>
-                <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
-                | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}<br>
-                السعر: ${o.price} ج.م`;
-            if (o.status !== 'delivered' && o.status !== 'cancelled') {
-                html += `<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-                    <button class="btn btn-sm btn-danger" onclick="adminCancelOrder('${id}')">إلغاء الطلب</button>
-                    <button class="btn btn-sm btn-primary" onclick="adminChangePrice('${id}')">تعديل السعر</button>
-                    <button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>
-                </div>`;
-            } else {
-                html += `<br><button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>`;
-            }
-            html += `</div>`;
-        });
-        document.getElementById('adminOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+        try {
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+            const snap = await getDocs(q);
+            let html = '';
+            snap.forEach(docSnap => {
+                const o = docSnap.data();
+                const id = docSnap.id;
+                html += `<div class="card">
+                    <b>${o.pickup} ← ${o.dropoff}</b><br>
+                    <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
+                    | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}<br>
+                    السعر: ${o.price} ج.م`;
+                if (o.status !== 'delivered' && o.status !== 'cancelled') {
+                    html += `<div style="margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+                        <button class="btn btn-sm btn-danger" onclick="adminCancelOrder('${id}')">إلغاء الطلب</button>
+                        <button class="btn btn-sm btn-primary" onclick="adminChangePrice('${id}')">تعديل السعر</button>
+                        <button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>
+                    </div>`;
+                } else {
+                    html += `<br><button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${id}')">تفاصيل</button>`;
+                }
+                html += `</div>`;
+            });
+            document.getElementById('adminOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+        } catch (e) {
+            alert('خطأ في تحميل الطلبات: ' + e.message);
+        }
     };
 
     window.adminCancelOrder = async (orderId) => {
         if (confirm('هل أنت متأكد من إلغاء هذا الطلب؟')) {
-            await updateDoc(doc(db, "orders", orderId), {
-                status: "cancelled",
-                updatedAt: serverTimestamp()
-            });
-            loadAllOrders();
+            try {
+                await updateDoc(doc(db, "orders", orderId), {
+                    status: "cancelled",
+                    updatedAt: serverTimestamp()
+                });
+                loadAllOrders();
+            } catch (e) {
+                alert('فشل إلغاء الطلب: ' + e.message);
+            }
         }
     };
 
     window.adminChangePrice = (orderId) => {
         const newPrice = prompt("أدخل السعر الجديد (بالجنية):");
-        if (newPrice && !isNaN(newPrice) && Number(newPrice) > 0) {
-            updateDoc(doc(db, "orders", orderId), {
-                status: "negotiating",
-                counterPrice: Number(newPrice),
-                counterBy: currentUser.username,
-                updatedAt: serverTimestamp()
-            }).then(() => loadAllOrders());
-        } else if (newPrice !== null) {
+        if (newPrice === null) return; // ألغى
+        const priceNum = Number(newPrice);
+        if (!newPrice || isNaN(priceNum) || priceNum <= 0) {
             alert("سعر غير صحيح");
+            return;
         }
+        updateDoc(doc(db, "orders", orderId), {
+            status: "negotiating",
+            counterPrice: priceNum,
+            counterBy: currentUser.username,
+            updatedAt: serverTimestamp()
+        }).then(() => loadAllOrders())
+          .catch(e => alert('فشل تعديل السعر: ' + e.message));
     };
 
     window.viewAdminOrderDetail = async (orderId) => {
-        const docSnap = await getDoc(doc(db, "orders", orderId));
-        if (!docSnap.exists()) return;
-        const o = docSnap.data();
-        let actionButtons = '';
-        if (o.status !== 'delivered' && o.status !== 'cancelled') {
-            actionButtons = `
-                <button class="btn btn-danger" onclick="adminCancelOrder('${orderId}')">إلغاء الطلب</button>
-                <button class="btn btn-primary" onclick="adminChangePrice('${orderId}')">تعديل السعر</button>
+        try {
+            const docSnap = await getDoc(doc(db, "orders", orderId));
+            if (!docSnap.exists()) return;
+            const o = docSnap.data();
+            let actionButtons = '';
+            if (o.status !== 'delivered' && o.status !== 'cancelled') {
+                actionButtons = `
+                    <button class="btn btn-danger" onclick="adminCancelOrder('${orderId}')">إلغاء الطلب</button>
+                    <button class="btn btn-primary" onclick="adminChangePrice('${orderId}')">تعديل السعر</button>
+                `;
+            }
+            const content = `
+                <h3>تفاصيل الطلب</h3>
+                <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
+                <p><b>مكان الطلب:</b> ${o.pickup}</p>
+                <p><b>مكان التسليم:</b> ${o.dropoff}</p>
+                <p><b>السعر:</b> ${o.price} ج.م</p>
+                <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
+                <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
+                <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
+                ${actionButtons}
+                <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
             `;
+            document.getElementById('adminOrderDetailContent').innerHTML = content;
+            document.getElementById('adminOrderDetailModal').classList.remove('hidden');
+        } catch (e) {
+            alert('خطأ: ' + e.message);
         }
-        const content = `
-            <h3>تفاصيل الطلب</h3>
-            <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
-            <p><b>مكان الطلب:</b> ${o.pickup}</p>
-            <p><b>مكان التسليم:</b> ${o.dropoff}</p>
-            <p><b>السعر:</b> ${o.price} ج.م</p>
-            <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
-            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
-            <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
-            ${actionButtons}
-            <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
-        `;
-        document.getElementById('adminOrderDetailContent').innerHTML = content;
-        document.getElementById('adminOrderDetailModal').classList.remove('hidden');
     };
     window.closeAdminDetail = () => document.getElementById('adminOrderDetailModal').classList.add('hidden');
 
     // --- إدارة السائقين ---
     window.loadDrivers = async () => {
-        const q = query(collection(db, "users"), where("role", "==", "driver"));
-        const snap = await getDocs(q);
-        let html = '';
-        snap.forEach(docSnap => {
-            const d = docSnap.data();
-            html += `<div class="card">
-                <b>${d.name}</b> (${d.username})<br>
-                الهاتف: ${d.phone || 'غير محدد'}
-                <button class="btn btn-danger" style="margin-top:8px;" onclick="deleteDriver('${docSnap.id}')">حذف السائق</button>
-            </div>`;
-        });
-        document.getElementById('driversList').innerHTML = html || '<p>لا يوجد سائقين.</p>';
+        try {
+            const q = query(collection(db, "users"), where("role", "==", "driver"));
+            const snap = await getDocs(q);
+            let html = '';
+            snap.forEach(docSnap => {
+                const d = docSnap.data();
+                html += `<div class="card">
+                    <b>${d.name}</b> (${d.username})<br>
+                    الهاتف: ${d.phone || 'غير محدد'}
+                    <button class="btn btn-danger" style="margin-top:8px;" onclick="deleteDriver('${docSnap.id}')">حذف السائق</button>
+                </div>`;
+            });
+            document.getElementById('driversList').innerHTML = html || '<p>لا يوجد سائقين.</p>';
+        } catch (e) {
+            alert('خطأ في تحميل السائقين: ' + e.message);
+        }
     };
 
     window.addDriver = async () => {
@@ -616,84 +652,96 @@
             document.getElementById('addDriverError').innerText = 'اسم المستخدم وكلمة المرور والاسم مطلوبة';
             return;
         }
-        const existQ = query(collection(db, "users"), where("username", "==", username));
-        const existSnap = await getDocs(existQ);
-        if (!existSnap.empty) {
-            document.getElementById('addDriverError').innerText = 'اسم المستخدم موجود مسبقاً';
-            return;
+        try {
+            const existQ = query(collection(db, "users"), where("username", "==", username));
+            const existSnap = await getDocs(existQ);
+            if (!existSnap.empty) {
+                document.getElementById('addDriverError').innerText = 'اسم المستخدم موجود مسبقاً';
+                return;
+            }
+            await addDoc(collection(db, "users"), {
+                username,
+                password,
+                name,
+                phone,
+                role: "driver"
+            });
+            document.getElementById('newDriverUsername').value = '';
+            document.getElementById('newDriverPassword').value = '';
+            document.getElementById('newDriverName').value = '';
+            document.getElementById('newDriverPhone').value = '';
+            document.getElementById('addDriverError').innerText = '';
+            loadDrivers();
+            alert('تم إضافة السائق بنجاح');
+        } catch (e) {
+            document.getElementById('addDriverError').innerText = 'خطأ: ' + e.message;
         }
-        await addDoc(collection(db, "users"), {
-            username,
-            password,
-            name,
-            phone,
-            role: "driver"
-        });
-        document.getElementById('newDriverUsername').value = '';
-        document.getElementById('newDriverPassword').value = '';
-        document.getElementById('newDriverName').value = '';
-        document.getElementById('newDriverPhone').value = '';
-        document.getElementById('addDriverError').innerText = '';
-        loadDrivers();
-        alert('تم إضافة السائق بنجاح');
     };
 
     window.deleteDriver = async (driverId) => {
         if (confirm('هل أنت متأكد من حذف هذا السائق؟')) {
-            await deleteDoc(doc(db, "users", driverId));
-            loadDrivers();
+            try {
+                await deleteDoc(doc(db, "users", driverId));
+                loadDrivers();
+            } catch (e) {
+                alert('فشل حذف السائق: ' + e.message);
+            }
         }
     };
 
     // --- التقارير ---
     function listenAdminReports() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        onSnapshot(q, snap => {});
+        onSnapshot(q, snap => {}, error => console.error(error));
     }
 
     window.loadAdminReports = async () => {
-        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        const snap = await getDocs(q);
-        let total = 0, pending = 0, accepted = 0, picked = 0, onWay = 0, delivered = 0, cancelled = 0;
-        const driverStats = {};
-        const customerStats = {};
-        snap.forEach(docSnap => {
-            const o = docSnap.data();
-            total++;
-            if (o.status === 'pending') pending++;
-            else if (o.status === 'accepted') accepted++;
-            else if (o.status === 'picked_up') picked++;
-            else if (o.status === 'on_the_way') onWay++;
-            else if (o.status === 'delivered') delivered++;
-            else if (o.status === 'cancelled') cancelled++;
+        try {
+            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+            const snap = await getDocs(q);
+            let total = 0, pending = 0, accepted = 0, picked = 0, onWay = 0, delivered = 0, cancelled = 0;
+            const driverStats = {};
+            const customerStats = {};
+            snap.forEach(docSnap => {
+                const o = docSnap.data();
+                total++;
+                if (o.status === 'pending') pending++;
+                else if (o.status === 'accepted') accepted++;
+                else if (o.status === 'picked_up') picked++;
+                else if (o.status === 'on_the_way') onWay++;
+                else if (o.status === 'delivered') delivered++;
+                else if (o.status === 'cancelled') cancelled++;
 
-            if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName] || 0) + 1;
-            if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName] || 0) + 1;
-        });
+                if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName] || 0) + 1;
+                if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName] || 0) + 1;
+            });
 
-        let html = `<div class="card"><h3>إحصائيات عامة</h3>
-            <p>إجمالي الطلبات: ${total}</p>
-            <p>معلقة: ${pending}</p>
-            <p>تم القبول: ${accepted}</p>
-            <p>تم الاستلام: ${picked}</p>
-            <p>في الطريق: ${onWay}</p>
-            <p>تم التسليم: ${delivered}</p>
-            <p>ملغاة: ${cancelled}</p>
-        </div>`;
+            let html = `<div class="card"><h3>إحصائيات عامة</h3>
+                <p>إجمالي الطلبات: ${total}</p>
+                <p>معلقة: ${pending}</p>
+                <p>تم القبول: ${accepted}</p>
+                <p>تم الاستلام: ${picked}</p>
+                <p>في الطريق: ${onWay}</p>
+                <p>تم التسليم: ${delivered}</p>
+                <p>ملغاة: ${cancelled}</p>
+            </div>`;
 
-        html += '<div class="card"><h3>أداء السائقين</h3>';
-        for (const [name, count] of Object.entries(driverStats)) {
-            html += `<p>${name}: ${count} طلب</p>`;
+            html += '<div class="card"><h3>أداء السائقين</h3>';
+            for (const [name, count] of Object.entries(driverStats)) {
+                html += `<p>${name}: ${count} طلب</p>`;
+            }
+            html += '</div>';
+
+            html += '<div class="card"><h3>الزبائن</h3>';
+            for (const [name, count] of Object.entries(customerStats)) {
+                html += `<p>${name}: ${count} طلب</p>`;
+            }
+            html += '</div>';
+
+            document.getElementById('adminReportsContent').innerHTML = html;
+        } catch (e) {
+            alert('خطأ في التقارير: ' + e.message);
         }
-        html += '</div>';
-
-        html += '<div class="card"><h3>الزبائن</h3>';
-        for (const [name, count] of Object.entries(customerStats)) {
-            html += `<p>${name}: ${count} طلب</p>`;
-        }
-        html += '</div>';
-
-        document.getElementById('adminReportsContent').innerHTML = html;
     };
 
     // ---------- الدردشة ----------
@@ -722,10 +770,37 @@
             });
             document.getElementById('chatMessages').innerHTML = html;
             document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+        }, error => {
+            console.error("خطأ في الدردشة:", error);
         });
     }
 
-    // (sendMessage معرف فوق)
+    window.sendMessage = async () => {
+        const text = document.getElementById('chatInput').value.trim();
+        if (!text || !currentOrderId) return;
+        let senderId, senderName;
+        if (currentUser) {
+            senderId = currentUser.username;
+            senderName = currentUser.name;
+        } else if (window.tempCustomer) {
+            senderId = window.tempCustomer.phone || 'customer';
+            senderName = window.tempCustomer.name || 'زبون';
+        } else {
+            alert('لا يمكن تحديد المرسل');
+            return;
+        }
+        try {
+            await addDoc(collection(db, "orders", currentOrderId, "messages"), {
+                senderId,
+                senderName,
+                text,
+                timestamp: serverTimestamp()
+            });
+            document.getElementById('chatInput').value = '';
+        } catch (e) {
+            alert('فشل إرسال الرسالة: ' + e.message);
+        }
+    };
 
     function translateStatus(status) {
         const map = {
