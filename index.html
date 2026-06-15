@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تطبيق التوصيل</title>
-    <!-- Font Awesome للأيقونات -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- reCAPTCHA -->
+    <script src="https://www.google.com/recaptcha/api.js" async defer></script>
     <style>
         :root {
             --primary: #d4af37;
@@ -36,6 +37,7 @@
             display: flex; align-items: center; justify-content: center; gap: 8px;
             transition: all 0.3s;
         }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary { background: var(--primary); color: #1e293b; }
         .btn-primary:hover { background: var(--primary-dark); }
         .btn-success { background: var(--success); color: white; }
@@ -88,8 +90,6 @@
         .chat-msg { margin-bottom: 8px; padding: 8px 12px; background: #e2e8f0; border-radius: 12px; }
         .msg-mine { background: #dbeafe; text-align: left; }
         .msg-sender { font-weight: bold; color: var(--primary-dark); }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .divider { border-top: 1px solid #e2e8f0; margin: 16px 0; }
     </style>
 </head>
 <body>
@@ -102,30 +102,35 @@
     </div>
     <div class="card">
         <h3>تسجيل الدخول</h3>
-        <input type="tel" id="phoneNumber" placeholder="رقم الهاتف (مثال: 01012345678)">
-        <div id="recaptcha-container"></div>
-        <button class="btn btn-primary" onclick="sendOTP()"><i class="fas fa-paper-plane"></i> إرسال رمز التحقق</button>
+        <input type="email" id="email" placeholder="البريد الإلكتروني">
+        <input type="password" id="password" placeholder="كلمة السر">
+        <!-- reCAPTCHA للدخول -->
+        <div class="g-recaptcha" 
+             data-sitekey="6LdtDyEtAAAAAAK4rtSn7ZgmZbxqffDLN1FndoiX" 
+             data-callback="onLoginCaptchaSuccess" 
+             data-expired-callback="onLoginCaptchaExpired"></div>
+        <button class="btn btn-primary" id="loginBtn" onclick="login()" disabled>دخول</button>
+        <button class="btn btn-outline" onclick="goToRegister()">إنشاء حساب جديد</button>
         <div id="loginError" style="color:red; text-align:center;"></div>
     </div>
 </div>
 
-<!-- ========== شاشة إدخال الرمز ========== -->
-<div id="otpScreen" class="app-container hidden">
+<!-- ========== شاشة إنشاء حساب ========== -->
+<div id="registerScreen" class="app-container hidden">
     <div class="card">
-        <h3>أدخل رمز التحقق</h3>
-        <input type="text" id="otpCode" placeholder="الرمز المكون من 6 أرقام" maxlength="6">
-        <button class="btn btn-primary" onclick="verifyOTP()">تأكيد</button>
-        <button class="btn btn-outline" onclick="backToLogin()">رجوع</button>
-    </div>
-</div>
-
-<!-- ========== شاشة إكمال التسجيل (أول مرة) ========== -->
-<div id="registerInfoScreen" class="app-container hidden">
-    <div class="card">
-        <h3>إكمال التسجيل</h3>
-        <input type="text" id="userName" placeholder="الاسم الكامل">
-        <select id="userRole"><option value="customer">زبون</option><option value="driver">سائق</option></select>
-        <button class="btn btn-primary" onclick="completeRegistration()">تسجيل</button>
+        <h3>إنشاء حساب</h3>
+        <input type="email" id="regEmail" placeholder="البريد الإلكتروني">
+        <input type="password" id="regPassword" placeholder="كلمة السر (6 أحرف)">
+        <input type="text" id="regName" placeholder="الاسم الكامل">
+        <select id="regRole"><option value="customer">زبون</option><option value="driver">سائق</option></select>
+        <!-- reCAPTCHA للتسجيل -->
+        <div class="g-recaptcha" 
+             data-sitekey="6LdtDyEtAAAAAAK4rtSn7ZgmZbxqffDLN1FndoiX" 
+             data-callback="onRegCaptchaSuccess" 
+             data-expired-callback="onRegCaptchaExpired"></div>
+        <button class="btn btn-primary" id="regBtn" onclick="register()" disabled>تسجيل</button>
+        <button class="btn btn-outline" onclick="goToLogin()">العودة لتسجيل الدخول</button>
+        <div id="regError" style="color:red; text-align:center;"></div>
     </div>
 </div>
 
@@ -190,10 +195,9 @@
     </div>
 </div>
 
-<!-- Firebase SDKs -->
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, signInWithPhoneNumber, RecaptchaVerifier, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
     import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -211,80 +215,94 @@
     const db = getFirestore(app);
 
     let currentUser = null;
-    let userData = null; // { name, phone, role }
+    let userData = null;
     let currentOrderId = null;
 
-    // ---- Recaptcha ----
-    window.recaptchaVerifier = null;
-    window.confirmationResult = null;
+    // ---- reCAPTCHA callbacks ----
+    window.onLoginCaptchaSuccess = () => {
+        document.getElementById('loginBtn').disabled = false;
+    };
+    window.onLoginCaptchaExpired = () => {
+        document.getElementById('loginBtn').disabled = true;
+        grecaptcha.reset();
+    };
 
-    function setupRecaptcha() {
-        if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-            size: 'invisible',
-            callback: () => { }
-        });
-    }
+    window.onRegCaptchaSuccess = () => {
+        document.getElementById('regBtn').disabled = false;
+    };
+    window.onRegCaptchaExpired = () => {
+        document.getElementById('regBtn').disabled = true;
+        grecaptcha.reset();
+    };
 
-    // ---- دوال الواجهة ----
-    window.sendOTP = async () => {
-        const phone = document.getElementById('phoneNumber').value.trim();
-        if (!phone) return;
-        setupRecaptcha();
-        const appVerifier = window.recaptchaVerifier;
+    window.goToRegister = () => {
+        document.getElementById('loginScreen').classList.add('hidden');
+        document.getElementById('registerScreen').classList.remove('hidden');
+        if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.reset();
+            document.getElementById('regBtn').disabled = true;
+        }
+    };
+
+    window.goToLogin = () => {
+        document.getElementById('registerScreen').classList.add('hidden');
+        document.getElementById('loginScreen').classList.remove('hidden');
+        if (typeof grecaptcha !== 'undefined') {
+            grecaptcha.reset();
+            document.getElementById('loginBtn').disabled = true;
+        }
+    };
+
+    window.login = async () => {
+        const email = document.getElementById('email').value.trim();
+        const pass = document.getElementById('password').value;
         try {
-            const confirmationResult = await signInWithPhoneNumber(auth, '+2' + phone, appVerifier);
-            window.confirmationResult = confirmationResult;
-            showScreen('otpScreen');
+            await signInWithEmailAndPassword(auth, email, pass);
             document.getElementById('loginError').innerText = '';
         } catch (e) {
             document.getElementById('loginError').innerText = "خطأ: " + e.message;
         }
     };
 
-    window.verifyOTP = async () => {
-        const code = document.getElementById('otpCode').value;
-        if (!code || !window.confirmationResult) return;
+    window.register = async () => {
+        const email = document.getElementById('regEmail').value.trim();
+        const pass = document.getElementById('regPassword').value;
+        const name = document.getElementById('regName').value.trim();
+        const role = document.getElementById('regRole').value;
+        if (!name) { document.getElementById('regError').innerText = 'الاسم مطلوب'; return; }
         try {
-            const result = await window.confirmationResult.confirm(code);
-            // تم تسجيل الدخول، onAuthStateChanged سيتولى الباقي
+            const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            await addDoc(collection(db, "users"), {
+                uid: cred.user.uid,
+                email: email,
+                name: name,
+                role: role
+            });
+            document.getElementById('regError').innerText = '';
+            goToLogin();
         } catch (e) {
-            alert("رمز خاطئ");
+            document.getElementById('regError').innerText = "خطأ: " + e.message;
         }
-    };
-
-    window.backToLogin = () => showScreen('loginScreen');
-
-    window.completeRegistration = async () => {
-        const name = document.getElementById('userName').value.trim();
-        const role = document.getElementById('userRole').value;
-        if (!name) return;
-        // حفظ بيانات المستخدم في Firestore
-        await addDoc(collection(db, "users"), {
-            uid: currentUser.uid,
-            phone: currentUser.phoneNumber,
-            name,
-            role
-        });
-        // إعادة تحميل ليدخل التطبيق
-        location.reload();
     };
 
     window.logout = () => signOut(auth);
 
-    // ---- مراقبة حالة المستخدم ----
     onAuthStateChanged(auth, async (user) => {
         if (user) {
             currentUser = user;
-            // جلب بيانات المستخدم من Firestore
             const q = query(collection(db, "users"), where("uid", "==", user.uid));
             const snap = await getDocs(q);
             if (!snap.empty) {
                 userData = snap.docs[0].data();
                 loadUI();
             } else {
-                // مستخدم جديد لم يسجل بياناته بعد
-                showScreen('registerInfoScreen');
+                await addDoc(collection(db, "users"), {
+                    uid: user.uid,
+                    email: user.email,
+                    name: user.email.split('@')[0],
+                    role: 'customer'
+                });
+                location.reload();
             }
         } else {
             currentUser = null;
@@ -325,7 +343,7 @@
         if (!pickup || !dropoff || !price) return;
         await addDoc(collection(db, "orders"), {
             customerId: currentUser.uid,
-            customerPhone: currentUser.phoneNumber,
+            customerEmail: currentUser.email,
             customerName: userData.name,
             pickup, dropoff, price,
             status: "pending",
@@ -373,8 +391,7 @@
             snap.forEach(docSnap => {
                 const o = docSnap.data();
                 const id = docSnap.id;
-                // للسائق يرى pending, negotiating, وجميع الطلبات التي قبلها
-                if (o.driverId && o.driverId !== currentUser.uid) return; // لا يرى طلبات غيره
+                if (o.driverId && o.driverId !== currentUser.uid) return;
                 html += `<div class="card">
                     <b>${o.pickup} → ${o.dropoff}</b><br>
                     السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
@@ -410,7 +427,7 @@
         await updateDoc(doc(db, "orders", orderId), {
             driverId: currentUser.uid,
             driverName: userData.name,
-            driverPhone: currentUser.phoneNumber,
+            driverEmail: currentUser.email,
             status: "accepted",
             updatedAt: serverTimestamp()
         });
@@ -466,12 +483,12 @@
         const o = docSnap.data();
         const content = `
             <h3>تفاصيل الطلب</h3>
-            <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
+            <p><b>الزبون:</b> ${o.customerName} (${o.customerEmail})</p>
             <p><b>مكان الطلب:</b> ${o.pickup}</p>
             <p><b>مكان التسليم:</b> ${o.dropoff}</p>
             <p><b>السعر:</b> ${o.price} ج.م</p>
             <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
-            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
+            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverEmail || ''})</p>
             <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
             <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
         `;
@@ -496,7 +513,7 @@
                 const m = doc.data();
                 const isMine = m.senderId === currentUser.uid;
                 html += `<div class="chat-msg ${isMine ? 'msg-mine' : ''}">
-                    <span class="msg-sender">${m.senderName || m.senderPhone}:</span> ${m.text}
+                    <span class="msg-sender">${m.senderName || m.senderEmail}:</span> ${m.text}
                 </div>`;
             });
             document.getElementById('chatMessages').innerHTML = html;
@@ -509,7 +526,7 @@
         if (!text || !currentOrderId) return;
         await addDoc(collection(db, "orders", currentOrderId, "messages"), {
             senderId: currentUser.uid,
-            senderPhone: currentUser.phoneNumber,
+            senderEmail: currentUser.email,
             senderName: userData?.name || '',
             text,
             timestamp: serverTimestamp()
@@ -517,7 +534,6 @@
         document.getElementById('chatInput').value = '';
     };
 
-    // ---------- مساعد ----------
     function translateStatus(status) {
         const map = {
             pending: 'معلق', accepted: 'مقبول', picked_up: 'تم الاستلام',
@@ -526,10 +542,10 @@
         return map[status] || status;
     }
 
-    // ---------- Service Worker ----------
+    // ---- Service Worker ----
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 </script>
 </body>
-    </html>
+</html>
