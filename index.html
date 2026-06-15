@@ -27,7 +27,7 @@
             min-height: 100vh;
         }
         .hidden { display: none !important; }
-        .app-container { max-width: 480px; margin: 0 auto; padding: 16px; }
+        .app-container { max-width: 500px; margin: 0 auto; padding: 16px; }
         .btn {
             padding: 14px 20px; border-radius: 14px; border: none; font-weight: bold;
             cursor: pointer; width: 100%; margin: 6px 0; font-size: 16px;
@@ -65,9 +65,11 @@
         }
         .pending { background: var(--warning); }
         .accepted { background: var(--info); }
-        .picked { background: #8b5cf6; }
+        .picked_up { background: #8b5cf6; }
+        .on_the_way { background: #6366f1; }
         .delivered { background: var(--success); }
         .cancelled { background: var(--danger); }
+        .negotiating { background: #ec4899; }
         .modal {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.6); display: flex; justify-content: center;
@@ -82,6 +84,9 @@
         .msg-mine { background: #dbeafe; text-align: left; }
         .msg-sender { font-weight: bold; color: var(--primary-dark); }
         .text-center { text-align: center; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+        .tab { flex: 1; padding: 10px; text-align: center; background: #e2e8f0; border-radius: 12px; font-weight: bold; cursor: pointer; }
+        .tab.active { background: var(--primary); color: #1e293b; }
     </style>
 </head>
 <body>
@@ -110,7 +115,7 @@
     </div>
 </div>
 
-<!-- ========== شاشة طلب العميل (بدون تسجيل) ========== -->
+<!-- ========== شاشة طلب العميل ========== -->
 <div id="customerOrderScreen" class="app-container hidden">
     <div class="header"><i class="fas fa-user"></i> طلب جديد</div>
     <div class="card">
@@ -136,14 +141,35 @@
 
 <!-- ========== شاشة المدير ========== -->
 <div id="adminScreen" class="app-container hidden">
-    <div class="header"><i class="fas fa-chart-bar"></i> تقارير</div>
+    <div class="header"><i class="fas fa-chart-bar"></i> لوحة التحكم</div>
     <div class="sub-header">
-        <span>لوحة التحكم</span>
+        <span>مدير النظام</span>
         <button class="btn btn-outline" onclick="logout()" style="width:auto;">خروج</button>
     </div>
-    <button class="btn btn-primary" onclick="showAllOrders()"><i class="fas fa-list"></i> جميع الطلبات</button>
-    <div id="adminReports"></div>
-    <div id="adminOrdersList"></div>
+    <div class="tabs">
+        <div class="tab active" onclick="showAdminTab('orders', this)">الطلبات</div>
+        <div class="tab" onclick="showAdminTab('drivers', this)">السائقين</div>
+        <div class="tab" onclick="showAdminTab('reports', this)">تقارير</div>
+    </div>
+    <div id="adminOrdersTab">
+        <button class="btn btn-primary" onclick="loadAllOrders()"><i class="fas fa-sync-alt"></i> تحديث الطلبات</button>
+        <div id="adminOrdersList"></div>
+    </div>
+    <div id="adminDriversTab" class="hidden">
+        <div class="card">
+            <h4>إضافة سائق جديد</h4>
+            <input type="text" id="newDriverUsername" placeholder="اسم المستخدم">
+            <input type="password" id="newDriverPassword" placeholder="كلمة المرور">
+            <input type="text" id="newDriverName" placeholder="الاسم الكامل">
+            <input type="tel" id="newDriverPhone" placeholder="رقم الهاتف">
+            <button class="btn btn-primary" onclick="addDriver()">إضافة سائق</button>
+            <div id="addDriverError" style="color:red;"></div>
+        </div>
+        <div id="driversList"></div>
+    </div>
+    <div id="adminReportsTab" class="hidden">
+        <div id="adminReportsContent"></div>
+    </div>
 </div>
 
 <!-- ========== نافذة الدردشة ========== -->
@@ -157,14 +183,14 @@
     </div>
 </div>
 
-<!-- ========== نافذة تفاصيل طلب للمدير ========== -->
+<!-- ========== نافذة تفاصيل طلب ========== -->
 <div id="adminOrderDetailModal" class="modal hidden">
     <div class="modal-content" id="adminOrderDetailContent"></div>
 </div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyBbSoW0Rn56U4sgH2A1USfdAhY5gdIL8v4",
@@ -179,7 +205,7 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
 
-    let currentUser = null; // { name, username, role } بعد تسجيل الدخول
+    let currentUser = null; // { name, username, role, phone }
     let currentOrderId = null;
 
     // ---------- التنقل بين الشاشات ----------
@@ -205,7 +231,7 @@
         goToMain();
     };
 
-    // ---------- تسجيل الدخول للسائقين والإدارة ----------
+    // ---------- تسجيل الدخول ----------
     window.login = async () => {
         const username = document.getElementById('username').value.trim();
         const password = document.getElementById('password').value.trim();
@@ -213,42 +239,34 @@
             document.getElementById('loginError').innerText = 'يرجى ملء جميع الحقول';
             return;
         }
-        try {
-            const q = query(collection(db, "users"), where("username", "==", username), where("password", "==", password));
-            const snap = await getDocs(q);
-            if (!snap.empty) {
-                const userData = snap.docs[0].data();
-                currentUser = {
-                    name: userData.name,
-                    username: userData.username,
-                    role: userData.role
-                };
-                document.getElementById('loginError').innerText = '';
-                loadUIAfterLogin();
-            } else {
-                document.getElementById('loginError').innerText = 'اسم المستخدم أو كلمة المرور خطأ';
+        const q = query(collection(db, "users"), where("username", "==", username), where("password", "==", password));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+            const userData = snap.docs[0].data();
+            currentUser = {
+                id: snap.docs[0].id,
+                name: userData.name,
+                username: userData.username,
+                role: userData.role,
+                phone: userData.phone || ''
+            };
+            document.getElementById('loginError').innerText = '';
+            if (currentUser.role === 'driver') {
+                document.getElementById('driverName').innerText = currentUser.name || 'سائق';
+                showScreen('driverScreen');
+                listenDriverOrders();
+            } else if (currentUser.role === 'admin') {
+                showScreen('adminScreen');
+                showAdminTab('orders', document.querySelector('.tab.active'));
+                loadAllOrders();
+                listenAdminReports();
             }
-        } catch (e) {
-            document.getElementById('loginError').innerText = 'خطأ: ' + e.message;
+        } else {
+            document.getElementById('loginError').innerText = 'اسم المستخدم أو كلمة المرور خطأ';
         }
     };
 
-    function loadUIAfterLogin() {
-        if (currentUser.role === 'driver') {
-            document.getElementById('driverName').innerText = currentUser.name || 'سائق';
-            showScreen('driverScreen');
-            listenDriverOrders();
-        } else if (currentUser.role === 'admin') {
-            showScreen('adminScreen');
-            listenAdmin();
-        } else {
-            // دور غير معروف – ارجع للرئيسية
-            currentUser = null;
-            goToMain();
-        }
-    }
-
-    // ---------- إنشاء طلب من الزبون (بدون تسجيل) ----------
+    // ---------- طلب الزبون ----------
     window.createCustomerOrder = async () => {
         const name = document.getElementById('custName').value.trim();
         const phone = document.getElementById('custPhone').value.trim();
@@ -267,6 +285,8 @@
             price,
             status: "pending",
             driverId: null,
+            driverName: null,
+            driverPhone: null,
             counterPrice: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -275,8 +295,7 @@
         goToMain();
     };
 
-    // ---------- عرض طلبات الزبون (غير مستخدم هنا، لكن يمكن إضافته) ----------
-    // ---------- شاشة السائق ----------
+    // ---------- السائق ----------
     function listenDriverOrders() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         onSnapshot(q, snap => {
@@ -284,21 +303,24 @@
             snap.forEach(docSnap => {
                 const o = docSnap.data();
                 const id = docSnap.id;
-                // السائق يرى الطلبات المعلقة، أو طلباته هو
+                // السائق يرى المعلقة، أو طلباته هو
                 if (o.driverId && o.driverId !== currentUser.username) return;
+                if (o.status === 'delivered' || o.status === 'cancelled') return; // إخفاء المكتملة والملغاة
                 html += `<div class="card">
-                    <b>${o.pickup} → ${o.dropoff}</b><br>
+                    <b>${o.pickup} ← ${o.dropoff}</b><br>
                     الزبون: ${o.customerName} (${o.customerPhone})<br>
                     السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
                 if (o.status === 'pending') {
                     html += `<input type="number" id="offerPrice${id}" placeholder="عرض سعرك" style="width:60%;">
                         <button class="btn btn-primary" onclick="makeCounterOffer('${id}')">تقديم عرض</button>
                         <button class="btn btn-success" onclick="acceptOrderDirect('${id}')">قبول مباشر</button>`;
-                } else if (o.status === 'negotiating' && o.counterPrice) {
-                    html += `عرضي: ${o.counterPrice} ج.م (بإنتظار العميل)`;
+                } else if (o.status === 'negotiating' && o.counterPrice && o.counterBy === currentUser.username) {
+                    html += `عرضي: ${o.counterPrice} ج.م (بإنتظار رد العميل)`;
                 } else if (o.status === 'accepted' && o.driverId === currentUser.username) {
-                    html += `<button class="btn btn-primary" onclick="updateOrderStatus('${id}', 'picked_up')">تم الاستلام</button>`;
+                    html += `<button class="btn btn-primary" onclick="updateOrderStatus('${id}', 'picked_up')">تم استلام الطلب</button>`;
                 } else if (o.status === 'picked_up' && o.driverId === currentUser.username) {
+                    html += `<button class="btn btn-primary" onclick="updateOrderStatus('${id}', 'on_the_way')">جاري التوصيل</button>`;
+                } else if (o.status === 'on_the_way' && o.driverId === currentUser.username) {
                     html += `<button class="btn btn-success" onclick="updateOrderStatus('${id}', 'delivered')">تم التسليم</button>`;
                 }
                 html += `<button class="btn btn-outline" onclick="openChat('${id}')">محادثة</button></div>`;
@@ -322,7 +344,7 @@
         await updateDoc(doc(db, "orders", orderId), {
             driverId: currentUser.username,
             driverName: currentUser.name,
-            driverPhone: currentUser.phone || '', // يمكن إضافة رقم للهاتف في بيانات المستخدم
+            driverPhone: currentUser.phone || '',
             status: "accepted",
             updatedAt: serverTimestamp()
         });
@@ -333,38 +355,32 @@
     };
 
     // ---------- المدير ----------
-    function listenAdmin() {
-        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-        onSnapshot(q, snap => {
-            let reportHtml = '';
-            const driverStats = {};
-            const customerStats = {};
-            snap.forEach(doc => {
-                const o = doc.data();
-                if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName] || 0) + 1;
-                if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName] || 0) + 1;
-            });
-            reportHtml += '<div class="card"><h3><i class="fas fa-users"></i> السائقين</h3>';
-            for (const [name, count] of Object.entries(driverStats)) {
-                reportHtml += `<p>${name}: ${count} طلب</p>`;
-            }
-            reportHtml += '</div><div class="card"><h3><i class="fas fa-users"></i> الزبائن</h3>';
-            for (const [name, count] of Object.entries(customerStats)) {
-                reportHtml += `<p>${name}: ${count} طلب</p>`;
-            }
-            reportHtml += '</div>';
-            document.getElementById('adminReports').innerHTML = reportHtml;
-        });
-    }
+    window.showAdminTab = (tabName, element) => {
+        document.querySelectorAll('#adminScreen .tab').forEach(t => t.classList.remove('active'));
+        element.classList.add('active');
+        document.getElementById('adminOrdersTab').classList.add('hidden');
+        document.getElementById('adminDriversTab').classList.add('hidden');
+        document.getElementById('adminReportsTab').classList.add('hidden');
+        if (tabName === 'orders') {
+            document.getElementById('adminOrdersTab').classList.remove('hidden');
+            loadAllOrders();
+        } else if (tabName === 'drivers') {
+            document.getElementById('adminDriversTab').classList.remove('hidden');
+            loadDrivers();
+        } else if (tabName === 'reports') {
+            document.getElementById('adminReportsTab').classList.remove('hidden');
+            loadAdminReports();
+        }
+    };
 
-    window.showAllOrders = async () => {
+    window.loadAllOrders = async () => {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         const snap = await getDocs(q);
         let html = '';
-        snap.forEach(doc => {
-            const o = doc.data();
-            html += `<div class="card" onclick="viewAdminOrderDetail('${doc.id}')" style="cursor:pointer">
-                <b>${o.pickup} → ${o.dropoff}</b><br>
+        snap.forEach(docSnap => {
+            const o = docSnap.data();
+            html += `<div class="card" onclick="viewAdminOrderDetail('${docSnap.id}')" style="cursor:pointer">
+                <b>${o.pickup} ← ${o.dropoff}</b><br>
                 <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
                 | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}
             </div>`;
@@ -391,6 +407,114 @@
         document.getElementById('adminOrderDetailModal').classList.remove('hidden');
     };
     window.closeAdminDetail = () => document.getElementById('adminOrderDetailModal').classList.add('hidden');
+
+    // --- إدارة السائقين ---
+    window.loadDrivers = async () => {
+        const q = query(collection(db, "users"), where("role", "==", "driver"));
+        const snap = await getDocs(q);
+        let html = '';
+        snap.forEach(docSnap => {
+            const d = docSnap.data();
+            html += `<div class="card">
+                <b>${d.name}</b> (${d.username})<br>
+                الهاتف: ${d.phone || 'غير محدد'}
+                <button class="btn btn-danger" style="margin-top:8px;" onclick="deleteDriver('${docSnap.id}')">حذف السائق</button>
+            </div>`;
+        });
+        document.getElementById('driversList').innerHTML = html || '<p>لا يوجد سائقين.</p>';
+    };
+
+    window.addDriver = async () => {
+        const username = document.getElementById('newDriverUsername').value.trim();
+        const password = document.getElementById('newDriverPassword').value.trim();
+        const name = document.getElementById('newDriverName').value.trim();
+        const phone = document.getElementById('newDriverPhone').value.trim();
+        if (!username || !password || !name) {
+            document.getElementById('addDriverError').innerText = 'اسم المستخدم وكلمة المرور والاسم مطلوبة';
+            return;
+        }
+        // تحقق من عدم وجود مستخدم بنفس الاسم
+        const existQ = query(collection(db, "users"), where("username", "==", username));
+        const existSnap = await getDocs(existQ);
+        if (!existSnap.empty) {
+            document.getElementById('addDriverError').innerText = 'اسم المستخدم موجود مسبقاً';
+            return;
+        }
+        await addDoc(collection(db, "users"), {
+            username,
+            password,
+            name,
+            phone,
+            role: "driver"
+        });
+        document.getElementById('newDriverUsername').value = '';
+        document.getElementById('newDriverPassword').value = '';
+        document.getElementById('newDriverName').value = '';
+        document.getElementById('newDriverPhone').value = '';
+        document.getElementById('addDriverError').innerText = '';
+        loadDrivers();
+        alert('تم إضافة السائق بنجاح');
+    };
+
+    window.deleteDriver = async (driverId) => {
+        if (confirm('هل أنت متأكد من حذف هذا السائق؟')) {
+            await deleteDoc(doc(db, "users", driverId));
+            loadDrivers();
+        }
+    };
+
+    // --- التقارير ---
+    function listenAdminReports() {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        onSnapshot(q, snap => {
+            // سيتم استدعاؤها عند تغيير أي طلب، لكننا نستخدم getDocs لمرة واحدة عند التبويب
+        });
+    }
+
+    window.loadAdminReports = async () => {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        let total = 0, pending = 0, accepted = 0, picked = 0, onWay = 0, delivered = 0, cancelled = 0;
+        const driverStats = {};
+        const customerStats = {};
+        snap.forEach(docSnap => {
+            const o = docSnap.data();
+            total++;
+            if (o.status === 'pending') pending++;
+            else if (o.status === 'accepted') accepted++;
+            else if (o.status === 'picked_up') picked++;
+            else if (o.status === 'on_the_way') onWay++;
+            else if (o.status === 'delivered') delivered++;
+            else if (o.status === 'cancelled') cancelled++;
+
+            if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName] || 0) + 1;
+            if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName] || 0) + 1;
+        });
+
+        let html = `<div class="card"><h3>إحصائيات عامة</h3>
+            <p>إجمالي الطلبات: ${total}</p>
+            <p>معلقة: ${pending}</p>
+            <p>تم القبول: ${accepted}</p>
+            <p>تم الاستلام: ${picked}</p>
+            <p>في الطريق: ${onWay}</p>
+            <p>تم التسليم: ${delivered}</p>
+            <p>ملغاة: ${cancelled}</p>
+        </div>`;
+
+        html += '<div class="card"><h3>أداء السائقين</h3>';
+        for (const [name, count] of Object.entries(driverStats)) {
+            html += `<p>${name}: ${count} طلب</p>`;
+        }
+        html += '</div>';
+
+        html += '<div class="card"><h3>الزبائن</h3>';
+        for (const [name, count] of Object.entries(customerStats)) {
+            html += `<p>${name}: ${count} طلب</p>`;
+        }
+        html += '</div>';
+
+        document.getElementById('adminReportsContent').innerHTML = html;
+    };
 
     // ---------- الدردشة ----------
     window.openChat = (orderId) => {
@@ -430,8 +554,13 @@
 
     function translateStatus(status) {
         const map = {
-            pending: 'معلق', accepted: 'مقبول', picked_up: 'تم الاستلام',
-            delivered: 'تم التسليم', cancelled: 'ملغى', negotiating: 'تفاوض'
+            pending: 'معلقة',
+            accepted: 'تم القبول',
+            picked_up: 'تم الاستلام',
+            on_the_way: 'في الطريق',
+            delivered: 'تم التسليم',
+            cancelled: 'ملغاة',
+            negotiating: 'تفاوض'
         };
         return map[status] || status;
     }
