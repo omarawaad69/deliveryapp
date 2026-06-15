@@ -4,340 +4,532 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>تطبيق التوصيل</title>
+    <!-- Font Awesome للأيقونات -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        :root {
+            --primary: #d4af37;
+            --primary-dark: #b8960c;
+            --bg: #f4f6f9;
+            --card: #ffffff;
+            --text: #1e293b;
+            --text-light: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --info: #3b82f6;
+            --radius: 20px;
+            --shadow: 0 10px 25px rgba(0,0,0,0.05);
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f2f2f2; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+        }
         .hidden { display: none !important; }
-        .container { max-width: 500px; margin: 0 auto; padding: 16px; }
-        .btn { padding: 12px 24px; border-radius: 12px; border: none; font-weight: bold; cursor: pointer; width: 100%; margin: 4px 0; }
-        .btn-primary { background: #2e7d32; color: white; }
-        .btn-danger { background: #c62828; color: white; }
-        .btn-outline { background: transparent; border: 1px solid #2e7d32; color: #2e7d32; }
-        input, select, textarea { width: 100%; padding: 12px; margin: 8px 0; border-radius: 12px; border: 1px solid #ccc; font-size: 16px; }
-        .card { background: white; border-radius: 16px; padding: 16px; margin: 12px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
-        .header { background: #1a1a2e; color: #e0c068; padding: 16px; text-align: center; font-size: 1.5rem; font-weight: bold; position: sticky; top: 0; }
-        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; justify-content: center; align-items: center; z-index: 100; }
-        .modal-content { background: white; width: 90%; max-width: 400px; border-radius: 20px; padding: 20px; max-height: 80vh; overflow-y: auto; }
-        .chat-box { max-height: 200px; overflow-y: auto; background: #f9f9f9; border-radius: 8px; padding: 8px; margin: 8px 0; }
-        .chat-msg { margin-bottom: 4px; }
-        .msg-sender { font-weight: bold; }
-        .badge { background: gold; color: black; padding: 2px 8px; border-radius: 12px; font-size: 0.8rem; }
+        .app-container { max-width: 480px; margin: 0 auto; padding: 16px; }
+        .btn {
+            padding: 14px 20px; border-radius: 14px; border: none; font-weight: bold;
+            cursor: pointer; width: 100%; margin: 6px 0; font-size: 16px;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            transition: all 0.3s;
+        }
+        .btn-primary { background: var(--primary); color: #1e293b; }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .btn-outline-danger { background: transparent; border: 2px solid var(--danger); color: var(--danger); }
+        input, select, textarea {
+            width: 100%; padding: 14px; margin: 8px 0; border-radius: 14px;
+            border: 1px solid #e2e8f0; font-size: 16px; background: white;
+        }
+        .card {
+            background: var(--card); border-radius: var(--radius); padding: 20px;
+            margin: 16px 0; box-shadow: var(--shadow);
+        }
+        .header {
+            background: linear-gradient(135deg, #1e293b, #0f172a);
+            color: var(--primary); padding: 20px; text-align: center;
+            font-size: 1.6rem; font-weight: bold; position: sticky; top: 0;
+            z-index: 10; border-bottom: 3px solid var(--primary);
+        }
+        .header i { margin-left: 8px; }
+        .sub-header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px; background: white; border-radius: 14px;
+            margin-bottom: 12px; box-shadow: var(--shadow);
+        }
+        .badge {
+            background: var(--primary); color: #1e293b; padding: 4px 10px;
+            border-radius: 20px; font-size: 0.85rem; font-weight: bold;
+        }
+        .status-badge {
+            display: inline-block; padding: 4px 12px; border-radius: 20px;
+            font-size: 0.8rem; font-weight: bold; color: white;
+        }
+        .pending { background: var(--warning); }
+        .accepted { background: var(--info); }
+        .picked { background: #8b5cf6; }
+        .delivered { background: var(--success); }
+        .cancelled { background: var(--danger); }
+        .modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); display: flex; justify-content: center;
+            align-items: center; z-index: 100; backdrop-filter: blur(4px);
+        }
+        .modal-content {
+            background: white; width: 90%; max-width: 420px; border-radius: 24px;
+            padding: 24px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .chat-box { max-height: 220px; overflow-y: auto; background: #f8fafc; border-radius: 12px; padding: 12px; margin: 12px 0; }
+        .chat-msg { margin-bottom: 8px; padding: 8px 12px; background: #e2e8f0; border-radius: 12px; }
+        .msg-mine { background: #dbeafe; text-align: left; }
+        .msg-sender { font-weight: bold; color: var(--primary-dark); }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .divider { border-top: 1px solid #e2e8f0; margin: 16px 0; }
     </style>
 </head>
 <body>
-    <!-- تسجيل الدخول -->
-    <div id="loginScreen" class="container">
-        <h2 style="text-align:center;">تسجيل الدخول</h2>
-        <input type="email" id="email" placeholder="البريد الإلكتروني">
-        <input type="password" id="password" placeholder="كلمة السر">
-        <button class="btn btn-primary" onclick="login()">دخول</button>
-        <button class="btn btn-outline" onclick="showRegister()">إنشاء حساب جديد</button>
-        <div id="loginError" style="color: red; text-align: center;"></div>
+
+<!-- ========== شاشة تسجيل الدخول ========== -->
+<div id="loginScreen" class="app-container">
+    <div style="text-align:center; margin:40px 0;">
+        <i class="fas fa-motorcycle" style="font-size:60px; color:var(--primary);"></i>
+        <h2 style="margin:16px 0;">تطبيق التوصيل</h2>
     </div>
-
-    <!-- إنشاء حساب -->
-    <div id="registerScreen" class="container hidden">
-        <h2 style="text-align:center;">إنشاء حساب</h2>
-        <input type="email" id="regEmail" placeholder="البريد الإلكتروني">
-        <input type="password" id="regPassword" placeholder="كلمة السر (6 أحرف على الأقل)">
-        <select id="role"><option value="customer">زبون</option><option value="driver">سائق</option></select>
-        <button class="btn btn-primary" onclick="register()">تسجيل</button>
-        <button class="btn btn-outline" onclick="showLogin()">العودة</button>
-        <div id="regError" style="color: red; text-align: center;"></div>
+    <div class="card">
+        <h3>تسجيل الدخول</h3>
+        <input type="tel" id="phoneNumber" placeholder="رقم الهاتف (مثال: 01012345678)">
+        <div id="recaptcha-container"></div>
+        <button class="btn btn-primary" onclick="sendOTP()"><i class="fas fa-paper-plane"></i> إرسال رمز التحقق</button>
+        <div id="loginError" style="color:red; text-align:center;"></div>
     </div>
+</div>
 
-    <!-- شاشة الزبون -->
-    <div id="customerScreen" class="container hidden">
-        <div class="header">📦 طلباتي</div>
-        <button class="btn btn-primary" onclick="showNewOrder()">➕ طلب توصيل جديد</button>
-        <div id="customerOrdersList"></div>
-        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+<!-- ========== شاشة إدخال الرمز ========== -->
+<div id="otpScreen" class="app-container hidden">
+    <div class="card">
+        <h3>أدخل رمز التحقق</h3>
+        <input type="text" id="otpCode" placeholder="الرمز المكون من 6 أرقام" maxlength="6">
+        <button class="btn btn-primary" onclick="verifyOTP()">تأكيد</button>
+        <button class="btn btn-outline" onclick="backToLogin()">رجوع</button>
     </div>
+</div>
 
-    <!-- شاشة السائق -->
-    <div id="driverScreen" class="container hidden">
-        <div class="header">🏍️ الطلبات المتاحة</div>
-        <div id="driverOrdersList"></div>
-        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+<!-- ========== شاشة إكمال التسجيل (أول مرة) ========== -->
+<div id="registerInfoScreen" class="app-container hidden">
+    <div class="card">
+        <h3>إكمال التسجيل</h3>
+        <input type="text" id="userName" placeholder="الاسم الكامل">
+        <select id="userRole"><option value="customer">زبون</option><option value="driver">سائق</option></select>
+        <button class="btn btn-primary" onclick="completeRegistration()">تسجيل</button>
     </div>
+</div>
 
-    <!-- شاشة المدير -->
-    <div id="adminScreen" class="container hidden">
-        <div class="header">📊 تقارير</div>
-        <div id="adminReports"></div>
-        <button class="btn btn-danger" onclick="logout()">تسجيل الخروج</button>
+<!-- ========== شاشة الزبون ========== -->
+<div id="customerScreen" class="app-container hidden">
+    <div class="header"><i class="fas fa-user"></i> طلباتي</div>
+    <div class="sub-header">
+        <span id="customerName">مرحباً</span>
+        <button class="btn btn-outline" onclick="logout()" style="width:auto;"><i class="fas fa-sign-out-alt"></i></button>
     </div>
+    <button class="btn btn-primary" onclick="showNewOrder()"><i class="fas fa-plus-circle"></i> طلب توصيل جديد</button>
+    <div id="customerOrdersList"></div>
+</div>
 
-    <!-- نافذة طلب جديد -->
-    <div id="newOrderModal" class="modal hidden">
-        <div class="modal-content">
-            <h3>طلب توصيل جديد</h3>
-            <input type="text" id="pickup" placeholder="مكان الاستلام (اسم المحل)">
-            <input type="text" id="dropoff" placeholder="مكان التسليم">
-            <input type="number" id="price" placeholder="السعر المقترح (ج.م)">
-            <button class="btn btn-primary" onclick="createOrder()">إرسال الطلب</button>
-            <button class="btn btn-outline" onclick="closeNewOrder()">إلغاء</button>
-        </div>
+<!-- ========== شاشة السائق ========== -->
+<div id="driverScreen" class="app-container hidden">
+    <div class="header"><i class="fas fa-motorcycle"></i> الطلبات</div>
+    <div class="sub-header">
+        <span id="driverName">مرحباً</span>
+        <button class="btn btn-outline" onclick="logout()" style="width:auto;"><i class="fas fa-sign-out-alt"></i></button>
     </div>
+    <div id="driverOrdersList"></div>
+</div>
 
-    <!-- نافذة الدردشة -->
-    <div id="chatModal" class="modal hidden">
-        <div class="modal-content">
-            <h3>محادثة الطلب</h3>
-            <div class="chat-box" id="chatMessages"></div>
-            <input type="text" id="chatInput" placeholder="اكتب رسالة...">
-            <button class="btn btn-primary" onclick="sendMessage()">إرسال</button>
-            <button class="btn btn-outline" onclick="closeChat()">إغلاق</button>
-        </div>
+<!-- ========== شاشة المدير ========== -->
+<div id="adminScreen" class="app-container hidden">
+    <div class="header"><i class="fas fa-chart-bar"></i> تقارير</div>
+    <div class="sub-header">
+        <span>لوحة التحكم</span>
+        <button class="btn btn-outline" onclick="logout()" style="width:auto;">خروج</button>
     </div>
+    <button class="btn btn-primary" onclick="showAllOrders()"><i class="fas fa-list"></i> جميع الطلبات</button>
+    <div id="adminReports"></div>
+    <div id="adminOrdersList"></div>
+</div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+<!-- ========== نافذة طلب جديد ========== -->
+<div id="newOrderModal" class="modal hidden">
+    <div class="modal-content">
+        <h3><i class="fas fa-shopping-bag"></i> طلب توصيل</h3>
+        <input type="text" id="pickupAddress" placeholder="مكان الطلب (المطعم/الصيدلية)">
+        <input type="text" id="dropoffAddress" placeholder="مكان تسليم الطلب (عنوان العميل)">
+        <input type="number" id="orderPrice" placeholder="السعر المقترح (ج.م)">
+        <button class="btn btn-primary" onclick="createOrder()">إرسال</button>
+        <button class="btn btn-outline" onclick="closeNewOrder()">إلغاء</button>
+    </div>
+</div>
 
-        // إعدادات Firebase الخاصة بك
-        const firebaseConfig = {
-            apiKey: "AIzaSyBbSoW0Rn56U4sgH2A1USfdAhY5gdIL8v4",
-            authDomain: "delivery-app-f4af2.firebaseapp.com",
-            projectId: "delivery-app-f4af2",
-            storageBucket: "delivery-app-f4af2.firebasestorage.app",
-            messagingSenderId: "490159202619",
-            appId: "1:490159202619:web:7f30858e1d0d826fed971e",
-            measurementId: "G-MYBKR56TEQ"
-        };
+<!-- ========== نافذة تفاصيل طلب للمدير ========== -->
+<div id="adminOrderDetailModal" class="modal hidden">
+    <div class="modal-content" id="adminOrderDetailContent"></div>
+</div>
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+<!-- ========== نافذة الدردشة ========== -->
+<div id="chatModal" class="modal hidden">
+    <div class="modal-content">
+        <h3><i class="fas fa-comments"></i> المحادثة</h3>
+        <div class="chat-box" id="chatMessages"></div>
+        <input type="text" id="chatInput" placeholder="رسالة...">
+        <button class="btn btn-primary" onclick="sendMessage()">إرسال</button>
+        <button class="btn btn-outline" onclick="closeChat()">إغلاق</button>
+    </div>
+</div>
 
-        let currentUser = null;
-        let userRole = null;
-        let currentOrderId = null;
+<!-- Firebase SDKs -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, signInWithPhoneNumber, RecaptchaVerifier, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, updateDoc, doc, serverTimestamp, getDocs, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        window.showRegister = () => {
-            document.getElementById('loginScreen').classList.add('hidden');
-            document.getElementById('registerScreen').classList.remove('hidden');
-        };
-        window.showLogin = () => {
-            document.getElementById('registerScreen').classList.add('hidden');
-            document.getElementById('loginScreen').classList.remove('hidden');
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyBbSoW0Rn56U4sgH2A1USfdAhY5gdIL8v4",
+        authDomain: "delivery-app-f4af2.firebaseapp.com",
+        projectId: "delivery-app-f4af2",
+        storageBucket: "delivery-app-f4af2.firebasestorage.app",
+        messagingSenderId: "490159202619",
+        appId: "1:490159202619:web:7f30858e1d0d826fed971e",
+        measurementId: "G-MYBKR56TEQ"
+    };
 
-        window.login = async () => {
-            const email = document.getElementById('email').value;
-            const pass = document.getElementById('password').value;
-            try {
-                await signInWithEmailAndPassword(auth, email, pass);
-            } catch (e) {
-                document.getElementById('loginError').innerText = "خطأ: " + e.message;
-            }
-        };
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
-        window.register = async () => {
-            const email = document.getElementById('regEmail').value;
-            const pass = document.getElementById('regPassword').value;
-            const role = document.getElementById('role').value;
-            try {
-                const cred = await createUserWithEmailAndPassword(auth, email, pass);
-                await addDoc(collection(db, "users"), { uid: cred.user.uid, email, role });
-                showLogin();
-            } catch (e) {
-                document.getElementById('regError').innerText = "خطأ: " + e.message;
-            }
-        };
+    let currentUser = null;
+    let userData = null; // { name, phone, role }
+    let currentOrderId = null;
 
-        window.logout = () => signOut(auth);
+    // ---- Recaptcha ----
+    window.recaptchaVerifier = null;
+    window.confirmationResult = null;
 
-        onAuthStateChanged(auth, async (user) => {
-            if (user) {
-                currentUser = user;
-                const q = query(collection(db, "users"), where("uid", "==", user.uid));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    userRole = snap.docs[0].data().role;
-                    loadUI();
-                }
-            } else {
-                currentUser = null;
-                userRole = null;
-                showScreen('loginScreen');
-            }
+    function setupRecaptcha() {
+        if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+            size: 'invisible',
+            callback: () => { }
         });
+    }
 
-        function showScreen(id) {
-            document.querySelectorAll('.container, .modal').forEach(el => el.classList.add('hidden'));
-            document.getElementById(id).classList.remove('hidden');
+    // ---- دوال الواجهة ----
+    window.sendOTP = async () => {
+        const phone = document.getElementById('phoneNumber').value.trim();
+        if (!phone) return;
+        setupRecaptcha();
+        const appVerifier = window.recaptchaVerifier;
+        try {
+            const confirmationResult = await signInWithPhoneNumber(auth, '+2' + phone, appVerifier);
+            window.confirmationResult = confirmationResult;
+            showScreen('otpScreen');
+            document.getElementById('loginError').innerText = '';
+        } catch (e) {
+            document.getElementById('loginError').innerText = "خطأ: " + e.message;
         }
+    };
 
-        function loadUI() {
-            if (userRole === 'customer') {
-                showScreen('customerScreen');
-                listenCustomerOrders();
-            } else if (userRole === 'driver') {
-                showScreen('driverScreen');
-                listenDriverOrders();
-            } else if (userRole === 'admin') {
-                showScreen('adminScreen');
-                listenAdmin();
-            }
+    window.verifyOTP = async () => {
+        const code = document.getElementById('otpCode').value;
+        if (!code || !window.confirmationResult) return;
+        try {
+            const result = await window.confirmationResult.confirm(code);
+            // تم تسجيل الدخول، onAuthStateChanged سيتولى الباقي
+        } catch (e) {
+            alert("رمز خاطئ");
         }
+    };
 
-        window.showNewOrder = () => document.getElementById('newOrderModal').classList.remove('hidden');
-        window.closeNewOrder = () => document.getElementById('newOrderModal').classList.add('hidden');
+    window.backToLogin = () => showScreen('loginScreen');
 
-        window.createOrder = async () => {
-            const pickup = document.getElementById('pickup').value;
-            const dropoff = document.getElementById('dropoff').value;
-            const price = Number(document.getElementById('price').value);
-            if (!pickup || !dropoff || !price) return;
-            await addDoc(collection(db, "orders"), {
-                customerId: currentUser.uid,
-                customerEmail: currentUser.email,
-                pickup, dropoff, price,
-                status: "pending",
-                driverId: null,
-                counterPrice: null,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp()
-            });
-            closeNewOrder();
-        };
+    window.completeRegistration = async () => {
+        const name = document.getElementById('userName').value.trim();
+        const role = document.getElementById('userRole').value;
+        if (!name) return;
+        // حفظ بيانات المستخدم في Firestore
+        await addDoc(collection(db, "users"), {
+            uid: currentUser.uid,
+            phone: currentUser.phoneNumber,
+            name,
+            role
+        });
+        // إعادة تحميل ليدخل التطبيق
+        location.reload();
+    };
 
-        function listenCustomerOrders() {
-            const q = query(collection(db, "orders"), where("customerId", "==", currentUser.uid), orderBy("createdAt", "desc"));
-            onSnapshot(q, snap => {
-                let html = '';
-                snap.forEach(doc => {
-                    const o = doc.data();
-                    html += `<div class="card"><b>${o.pickup} ➔ ${o.dropoff}</b><br>السعر: ${o.price} ج.م | الحالة: <span class="badge">${o.status}</span><br>`;
-                    if (o.status === 'negotiating' && o.counterPrice) {
-                        html += `<span style="color:red;">عرض مضاد: ${o.counterPrice} ج.م</span>
-                            <button class="btn btn-primary" onclick="acceptCounter('${doc.id}')">قبول</button>
-                            <button class="btn btn-danger" onclick="rejectCounter('${doc.id}')">رفض</button>`;
-                    }
-                    html += `<button class="btn btn-outline" onclick="openChat('${doc.id}')">💬 محادثة</button></div>`;
-                });
-                document.getElementById('customerOrdersList').innerHTML = html || '<p>لا توجد طلبات.</p>';
-            });
-        }
+    window.logout = () => signOut(auth);
 
-        function listenDriverOrders() {
-            const q = query(collection(db, "orders"), where("status", "in", ["pending", "negotiating"]), orderBy("createdAt", "desc"));
-            onSnapshot(q, snap => {
-                let html = '';
-                snap.forEach(doc => {
-                    const o = doc.data();
-                    html += `<div class="card"><b>${o.pickup} ➔ ${o.dropoff}</b><br>السعر: ${o.price} ج.م<br>`;
-                    if (o.status === 'pending') {
-                        html += `<input type="number" id="offerPrice${doc.id}" placeholder="عرض سعرك" style="width:60%;">
-                            <button class="btn btn-primary" onclick="makeCounterOffer('${doc.id}')">تقديم عرض</button>
-                            <button class="btn btn-primary" onclick="acceptOrderDirect('${doc.id}')">قبول مباشر</button>`;
-                    } else if (o.status === 'negotiating' && o.counterPrice) {
-                        html += `عرضي: ${o.counterPrice} ج.م (بإنتظار رد العميل)`;
-                    }
-                    html += `</div>`;
-                });
-                document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات حالياً.</p>';
-            });
-        }
-
-        window.makeCounterOffer = async (orderId) => {
-            const newPrice = Number(document.getElementById(`offerPrice${orderId}`).value);
-            if (!newPrice) return;
-            await updateDoc(doc(db, "orders", orderId), {
-                status: "negotiating",
-                counterPrice: newPrice,
-                counterBy: currentUser.uid,
-                updatedAt: serverTimestamp()
-            });
-        };
-
-        window.acceptOrderDirect = async (orderId) => {
-            await updateDoc(doc(db, "orders", orderId), {
-                driverId: currentUser.uid,
-                driverEmail: currentUser.email,
-                status: "accepted",
-                updatedAt: serverTimestamp()
-            });
-        };
-
-        window.acceptCounter = async (orderId) => {
-            const snap = await getDocs(query(collection(db, "orders"), where("__name__", "==", orderId)));
+    // ---- مراقبة حالة المستخدم ----
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUser = user;
+            // جلب بيانات المستخدم من Firestore
+            const q = query(collection(db, "users"), where("uid", "==", user.uid));
+            const snap = await getDocs(q);
             if (!snap.empty) {
-                const data = snap.docs[0].data();
-                await updateDoc(doc(db, "orders", orderId), {
-                    price: data.counterPrice,
-                    status: "accepted",
-                    counterPrice: null,
-                    updatedAt: serverTimestamp()
-                });
+                userData = snap.docs[0].data();
+                loadUI();
+            } else {
+                // مستخدم جديد لم يسجل بياناته بعد
+                showScreen('registerInfoScreen');
             }
-        };
-
-        window.rejectCounter = async (orderId) => {
-            await updateDoc(doc(db, "orders", orderId), {
-                status: "pending",
-                counterPrice: null,
-                updatedAt: serverTimestamp()
-            });
-        };
-
-        window.openChat = (orderId) => {
-            currentOrderId = orderId;
-            document.getElementById('chatModal').classList.remove('hidden');
-            listenChat(orderId);
-        };
-        window.closeChat = () => {
-            document.getElementById('chatModal').classList.add('hidden');
-            currentOrderId = null;
-        };
-
-        function listenChat(orderId) {
-            const q = query(collection(db, "orders", orderId, "messages"), orderBy("timestamp"));
-            onSnapshot(q, snap => {
-                let html = '';
-                snap.forEach(doc => {
-                    const m = doc.data();
-                    html += `<div class="chat-msg"><span class="msg-sender">${m.senderEmail.split('@')[0]}:</span> ${m.text}</div>`;
-                });
-                document.getElementById('chatMessages').innerHTML = html;
-            });
+        } else {
+            currentUser = null;
+            userData = null;
+            showScreen('loginScreen');
         }
+    });
 
-        window.sendMessage = async () => {
-            const text = document.getElementById('chatInput').value.trim();
-            if (!text || !currentOrderId) return;
-            await addDoc(collection(db, "orders", currentOrderId, "messages"), {
-                senderId: currentUser.uid,
-                senderEmail: currentUser.email,
-                text,
-                timestamp: serverTimestamp()
-            });
-            document.getElementById('chatInput').value = '';
-        };
+    function showScreen(id) {
+        document.querySelectorAll('.app-container, .modal').forEach(el => el.classList.add('hidden'));
+        const screen = document.getElementById(id);
+        if (screen) screen.classList.remove('hidden');
+    }
 
-        function listenAdmin() {
-            const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
-            onSnapshot(q, snap => {
-                let html = '<h3>جميع الطلبات</h3>';
-                const driverCounts = {};
-                snap.forEach(doc => {
-                    const o = doc.data();
-                    html += `<p>${o.customerEmail}: ${o.pickup}→${o.dropoff} (${o.status})</p>`;
-                    if (o.driverEmail) driverCounts[o.driverEmail] = (driverCounts[o.driverEmail]||0)+1;
-                });
-                html += '<h3>السائقين</h3>';
-                for (const [email, count] of Object.entries(driverCounts)) {
-                    html += `<p>${email}: ${count} طلب</p>`;
+    function loadUI() {
+        if (userData.role === 'customer') {
+            document.getElementById('customerName').innerText = userData.name || 'زبون';
+            showScreen('customerScreen');
+            listenCustomerOrders();
+        } else if (userData.role === 'driver') {
+            document.getElementById('driverName').innerText = userData.name || 'سائق';
+            showScreen('driverScreen');
+            listenDriverOrders();
+        } else if (userData.role === 'admin') {
+            showScreen('adminScreen');
+            listenAdmin();
+        }
+    }
+
+    // ---------- الزبون ----------
+    window.showNewOrder = () => document.getElementById('newOrderModal').classList.remove('hidden');
+    window.closeNewOrder = () => document.getElementById('newOrderModal').classList.add('hidden');
+
+    window.createOrder = async () => {
+        const pickup = document.getElementById('pickupAddress').value.trim();
+        const dropoff = document.getElementById('dropoffAddress').value.trim();
+        const price = Number(document.getElementById('orderPrice').value);
+        if (!pickup || !dropoff || !price) return;
+        await addDoc(collection(db, "orders"), {
+            customerId: currentUser.uid,
+            customerPhone: currentUser.phoneNumber,
+            customerName: userData.name,
+            pickup, dropoff, price,
+            status: "pending",
+            driverId: null,
+            counterPrice: null,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+        closeNewOrder();
+    };
+
+    function listenCustomerOrders() {
+        const q = query(collection(db, "orders"), where("customerId", "==", currentUser.uid), orderBy("createdAt", "desc"));
+        onSnapshot(q, snap => {
+            let html = '';
+            snap.forEach(docSnap => {
+                const o = docSnap.data();
+                const id = docSnap.id;
+                html += `<div class="card">
+                    <b>${o.pickup} → ${o.dropoff}</b><br>
+                    السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
+                if (o.status === 'negotiating' && o.counterPrice) {
+                    html += `<span style="color:red;">عرض مضاد: ${o.counterPrice} ج.م</span>
+                        <button class="btn btn-success" onclick="acceptCounter('${id}')">قبول</button>
+                        <button class="btn btn-danger" onclick="rejectCounter('${id}')">رفض</button>`;
                 }
-                document.getElementById('adminReports').innerHTML = html;
+                if (o.status === 'pending') {
+                    html += `<button class="btn btn-outline-danger" onclick="cancelOrder('${id}')">إلغاء</button>`;
+                }
+                html += `<button class="btn btn-outline" onclick="openChat('${id}')"><i class="fas fa-comment"></i> محادثة</button></div>`;
             });
-        }
+            document.getElementById('customerOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+        });
+    }
 
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
-        }
-    </script>
+    window.cancelOrder = async (orderId) => {
+        await updateDoc(doc(db, "orders", orderId), { status: "cancelled", updatedAt: serverTimestamp() });
+    };
+
+    // ---------- السائق ----------
+    function listenDriverOrders() {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        onSnapshot(q, snap => {
+            let html = '';
+            snap.forEach(docSnap => {
+                const o = docSnap.data();
+                const id = docSnap.id;
+                // للسائق يرى pending, negotiating, وجميع الطلبات التي قبلها
+                if (o.driverId && o.driverId !== currentUser.uid) return; // لا يرى طلبات غيره
+                html += `<div class="card">
+                    <b>${o.pickup} → ${o.dropoff}</b><br>
+                    السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
+                if (o.status === 'pending') {
+                    html += `<input type="number" id="offerPrice${id}" placeholder="عرض سعرك" style="width:60%;">
+                        <button class="btn btn-primary" onclick="makeCounterOffer('${id}')">تقديم عرض</button>
+                        <button class="btn btn-success" onclick="acceptOrderDirect('${id}')">قبول مباشر</button>`;
+                } else if (o.status === 'negotiating' && o.counterPrice) {
+                    html += `عرضي: ${o.counterPrice} ج.م (بإنتظار العميل)`;
+                } else if (o.status === 'accepted' && o.driverId === currentUser.uid) {
+                    html += `<button class="btn btn-primary" onclick="updateOrderStatus('${id}', 'picked_up')">تم الاستلام</button>`;
+                } else if (o.status === 'picked_up' && o.driverId === currentUser.uid) {
+                    html += `<button class="btn btn-success" onclick="updateOrderStatus('${id}', 'delivered')">تم التسليم</button>`;
+                }
+                html += `<button class="btn btn-outline" onclick="openChat('${id}')">محادثة</button></div>`;
+            });
+            document.getElementById('driverOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+        });
+    }
+
+    window.makeCounterOffer = async (orderId) => {
+        const newPrice = Number(document.getElementById(`offerPrice${orderId}`).value);
+        if (!newPrice) return;
+        await updateDoc(doc(db, "orders", orderId), {
+            status: "negotiating",
+            counterPrice: newPrice,
+            counterBy: currentUser.uid,
+            updatedAt: serverTimestamp()
+        });
+    };
+
+    window.acceptOrderDirect = async (orderId) => {
+        await updateDoc(doc(db, "orders", orderId), {
+            driverId: currentUser.uid,
+            driverName: userData.name,
+            driverPhone: currentUser.phoneNumber,
+            status: "accepted",
+            updatedAt: serverTimestamp()
+        });
+    };
+
+    window.updateOrderStatus = async (orderId, newStatus) => {
+        await updateDoc(doc(db, "orders", orderId), { status: newStatus, updatedAt: serverTimestamp() });
+    };
+
+    // ---------- المدير ----------
+    function listenAdmin() {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        onSnapshot(q, snap => {
+            let reportHtml = '';
+            const driverStats = {};
+            const customerStats = {};
+            snap.forEach(doc => {
+                const o = doc.data();
+                if (o.driverName) driverStats[o.driverName] = (driverStats[o.driverName]||0)+1;
+                if (o.customerName) customerStats[o.customerName] = (customerStats[o.customerName]||0)+1;
+            });
+            reportHtml += '<div class="card"><h3><i class="fas fa-users"></i> السائقين</h3>';
+            for (const [name, count] of Object.entries(driverStats)) {
+                reportHtml += `<p>${name}: ${count} طلب</p>`;
+            }
+            reportHtml += '</div><div class="card"><h3><i class="fas fa-users"></i> الزبائن</h3>';
+            for (const [name, count] of Object.entries(customerStats)) {
+                reportHtml += `<p>${name}: ${count} طلب</p>`;
+            }
+            reportHtml += '</div>';
+            document.getElementById('adminReports').innerHTML = reportHtml;
+        });
+    }
+
+    window.showAllOrders = async () => {
+        const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+        const snap = await getDocs(q);
+        let html = '';
+        snap.forEach(doc => {
+            const o = doc.data();
+            html += `<div class="card" onclick="viewAdminOrderDetail('${doc.id}')" style="cursor:pointer">
+                <b>${o.pickup} → ${o.dropoff}</b><br>
+                <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
+                | زبون: ${o.customerName || '---'} | سائق: ${o.driverName || '---'}
+            </div>`;
+        });
+        document.getElementById('adminOrdersList').innerHTML = html || '<p>لا طلبات.</p>';
+    };
+
+    window.viewAdminOrderDetail = async (orderId) => {
+        const docSnap = await getDoc(doc(db, "orders", orderId));
+        if (!docSnap.exists()) return;
+        const o = docSnap.data();
+        const content = `
+            <h3>تفاصيل الطلب</h3>
+            <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone})</p>
+            <p><b>مكان الطلب:</b> ${o.pickup}</p>
+            <p><b>مكان التسليم:</b> ${o.dropoff}</p>
+            <p><b>السعر:</b> ${o.price} ج.م</p>
+            <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
+            <p><b>السائق:</b> ${o.driverName || '---'} (${o.driverPhone || ''})</p>
+            <p><b>تاريخ الإنشاء:</b> ${o.createdAt?.toDate().toLocaleString()}</p>
+            <button class="btn btn-outline" onclick="closeAdminDetail()">إغلاق</button>
+        `;
+        document.getElementById('adminOrderDetailContent').innerHTML = content;
+        document.getElementById('adminOrderDetailModal').classList.remove('hidden');
+    };
+    window.closeAdminDetail = () => document.getElementById('adminOrderDetailModal').classList.add('hidden');
+
+    // ---------- الدردشة ----------
+    window.openChat = (orderId) => {
+        currentOrderId = orderId;
+        document.getElementById('chatModal').classList.remove('hidden');
+        listenChat(orderId);
+    };
+    window.closeChat = () => { document.getElementById('chatModal').classList.add('hidden'); currentOrderId = null; };
+
+    function listenChat(orderId) {
+        const q = query(collection(db, "orders", orderId, "messages"), orderBy("timestamp"));
+        onSnapshot(q, snap => {
+            let html = '';
+            snap.forEach(doc => {
+                const m = doc.data();
+                const isMine = m.senderId === currentUser.uid;
+                html += `<div class="chat-msg ${isMine ? 'msg-mine' : ''}">
+                    <span class="msg-sender">${m.senderName || m.senderPhone}:</span> ${m.text}
+                </div>`;
+            });
+            document.getElementById('chatMessages').innerHTML = html;
+            document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+        });
+    }
+
+    window.sendMessage = async () => {
+        const text = document.getElementById('chatInput').value.trim();
+        if (!text || !currentOrderId) return;
+        await addDoc(collection(db, "orders", currentOrderId, "messages"), {
+            senderId: currentUser.uid,
+            senderPhone: currentUser.phoneNumber,
+            senderName: userData?.name || '',
+            text,
+            timestamp: serverTimestamp()
+        });
+        document.getElementById('chatInput').value = '';
+    };
+
+    // ---------- مساعد ----------
+    function translateStatus(status) {
+        const map = {
+            pending: 'معلق', accepted: 'مقبول', picked_up: 'تم الاستلام',
+            delivered: 'تم التسليم', cancelled: 'ملغى', negotiating: 'تفاوض'
+        };
+        return map[status] || status;
+    }
+
+    // ---------- Service Worker ----------
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+</script>
 </body>
-</html>
+    </html>
