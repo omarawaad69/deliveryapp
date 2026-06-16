@@ -92,7 +92,7 @@
 </head>
 <body>
 
-<!-- الشاشات كما هي في الكود السابق دون تغيير في الهيكل -->
+<!-- الشاشات كما هي دون تغيير في الهيكل -->
 <div id="mainScreen" class="app-container">
     <div class="text-center" style="margin:40px 0;">
         <i class="fas fa-motorcycle" style="font-size:60px; color:var(--primary);"></i>
@@ -177,7 +177,14 @@
         <div id="driversList"></div>
     </div>
     <div id="adminReportsTab" class="hidden">
+        <button class="btn btn-primary" onclick="loadAdminReports()"><i class="fas fa-sync-alt"></i> تحديث الإحصائيات</button>
         <div id="adminReportsContent"></div>
+        <!-- تقرير مفصل للسائقين -->
+        <div class="card" style="margin-top:16px;">
+            <h4>تقرير أداء السائقين المفصّل</h4>
+            <button class="btn btn-outline" onclick="loadDetailedDriverReport()">عرض التقرير</button>
+            <div id="detailedDriverReport"></div>
+        </div>
     </div>
 </div>
 
@@ -214,7 +221,7 @@
 
     let currentUser = null;
     let currentOrderId = null;
-    window.tempCustomer = null; // لحفظ بيانات الزبون المؤقتة للدردشة
+    window.tempCustomer = null;
 
     // ---------- التنقل ----------
     function showScreen(id) {
@@ -325,14 +332,12 @@
         errorDiv.innerText = '';
         if (!phone) { errorDiv.innerText = 'أدخل رقم الهاتف'; return; }
         try {
-            // لا نستخدم orderBy مع where، بل نجلب الكل ثم نرتب
             const q = query(collection(db, "orders"), where("customerPhone", "==", phone));
             const snap = await getDocs(q);
             let orders = [];
             snap.forEach(docSnap => {
                 orders.push({ id: docSnap.id, ...docSnap.data() });
             });
-            // ترتيب تنازلي حسب createdAt
             orders.sort((a, b) => {
                 const timeA = a.createdAt?.seconds || 0;
                 const timeB = b.createdAt?.seconds || 0;
@@ -576,7 +581,7 @@
 
     window.adminChangePrice = (orderId) => {
         const newPrice = prompt("أدخل السعر الجديد (بالجنية):");
-        if (newPrice === null) return; // ألغى
+        if (newPrice === null) return;
         const priceNum = Number(newPrice);
         if (!newPrice || isNaN(priceNum) || priceNum <= 0) {
             alert("سعر غير صحيح");
@@ -742,6 +747,75 @@
         } catch (e) {
             alert('خطأ في التقارير: ' + e.message);
         }
+    };
+
+    // --- التقرير المفصل للسائقين ---
+    window.loadDetailedDriverReport = async () => {
+        const div = document.getElementById('detailedDriverReport');
+        div.innerHTML = '<p>جاري التحميل...</p>';
+        try {
+            // جلب جميع السائقين
+            const usersQ = query(collection(db, "users"), where("role", "==", "driver"));
+            const usersSnap = await getDocs(usersQ);
+            const drivers = [];
+            usersSnap.forEach(docSnap => {
+                drivers.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            // جلب جميع الطلبات
+            const ordersQ = query(collection(db, "orders"), orderBy("createdAt", "desc"));
+            const ordersSnap = await getDocs(ordersQ);
+            const allOrders = [];
+            ordersSnap.forEach(docSnap => {
+                allOrders.push({ id: docSnap.id, ...docSnap.data() });
+            });
+
+            // بناء إحصائيات لكل سائق
+            let html = '';
+            for (const driver of drivers) {
+                const driverOrders = allOrders.filter(o =>
+                    o.driverId === driver.username || o.counterBy === driver.username
+                );
+                const totalOrders = driverOrders.length;
+                const acceptedOrders = driverOrders.filter(o => o.status === 'accepted' || o.status === 'picked_up' || o.status === 'on_the_way' || o.status === 'delivered').length;
+                const cancelledOrders = driverOrders.filter(o => o.status === 'cancelled').length;
+                const negotiatingOrders = driverOrders.filter(o => o.status === 'negotiating').length;
+                const completedOrders = driverOrders.filter(o => o.status === 'delivered').length;
+
+                html += `<div class="card" style="margin-bottom:12px;">
+                    <b>${driver.name} (${driver.username})</b><br>
+                    إجمالي الطلبات: ${totalOrders} | مكتملة: ${completedOrders} | مقبولة: ${acceptedOrders} | ملغاة: ${cancelledOrders} | تفاوض: ${negotiatingOrders}
+                    <button class="btn btn-sm btn-outline" onclick="viewDriverOrders('${driver.username}')" style="margin-top:8px;">عرض الطلبات</button>
+                    <div id="driverOrders_${driver.username}" style="margin-top:8px;"></div>
+                </div>`;
+            }
+            html = html || '<p>لا يوجد سائقين.</p>';
+            div.innerHTML = html;
+        } catch (e) {
+            div.innerHTML = '<p style="color:red;">خطأ: ' + e.message + '</p>';
+        }
+    };
+
+    window.viewDriverOrders = (driverUsername) => {
+        const container = document.getElementById('driverOrders_' + driverUsername);
+        if (container.innerHTML) {
+            container.innerHTML = '';
+            return;
+        }
+        container.innerHTML = '<p>جاري تحميل الطلبات...</p>';
+        getDocs(query(collection(db, "orders"), orderBy("createdAt", "desc"))).then(snap => {
+            const orders = [];
+            snap.forEach(docSnap => orders.push({ id: docSnap.id, ...docSnap.data() }));
+            const driverOrders = orders.filter(o => o.driverId === driverUsername || o.counterBy === driverUsername);
+            let html = '';
+            driverOrders.forEach(o => {
+                html += `<div style="background:#f9f9f9; padding:8px; border-radius:8px; margin:4px 0;">
+                    <b>${o.pickup} → ${o.dropoff}</b> | ${translateStatus(o.status)} | ${o.price} ج.م<br>
+                    زبون: ${o.customerName}
+                </div>`;
+            });
+            container.innerHTML = html || '<p>لا طلبات.</p>';
+        }).catch(e => container.innerHTML = '<p style="color:red;">خطأ</p>');
     };
 
     // ---------- الدردشة ----------
