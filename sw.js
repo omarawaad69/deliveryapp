@@ -1,4 +1,4 @@
-const CACHE_NAME = 'delivery-v12';
+const CACHE_NAME = 'delivery-v13';
 const urlsToCache = ['./', './index.html'];
 
 self.addEventListener('install', event => {
