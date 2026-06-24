@@ -43,6 +43,7 @@
             width: 100%; padding: 14px; margin: 8px 0; border-radius: 14px;
             border: 1px solid #e2e8f0; font-size: 16px; background: white;
         }
+        textarea { min-height: 100px; resize: vertical; }
         .card {
             background: var(--card); border-radius: var(--radius); padding: 20px;
             margin: 16px 0; box-shadow: var(--shadow);
@@ -91,6 +92,7 @@
         .section-title { font-weight: bold; margin: 12px 0 8px; color: var(--primary-dark); }
         .copy-btn { cursor: pointer; margin-right: 4px; color: var(--info); font-size: 0.9rem; }
         .copy-btn:hover { color: var(--primary-dark); }
+        .order-desc { background: #f1f5f9; padding: 8px; border-radius: 8px; margin: 6px 0; font-style: italic; color: #334155; }
     </style>
 </head>
 <body>
@@ -125,6 +127,7 @@
         <input type="text" id="custName" placeholder="اسمك الكامل">
         <input type="tel" id="custPhone" placeholder="رقم الهاتف (مهم لتتبع الطلب)">
         <input type="text" id="pickupAddress" placeholder="مكان الطلب (المطعم/الصيدلية)">
+        <textarea id="orderDescription" placeholder="وصف الطلب (مثلاً: اشتري دواء باراسيتامول، أحضر عيش وحليب...)"></textarea>
         <input type="text" id="dropoffAddress" placeholder="مكان تسليم الطلب (عنوانك)">
         <input type="number" id="orderPrice" placeholder="السعر المقترح (ج.م)">
         <button class="btn btn-primary" onclick="createCustomerOrder()">إرسال الطلب</button>
@@ -165,13 +168,11 @@
         <div class="tab" onclick="showAdminTab('reports', this)">تقارير</div>
     </div>
 
-    <!-- تبويب الطلبات -->
     <div id="adminOrdersTab">
         <button class="btn btn-primary" onclick="loadAllOrders()"><i class="fas fa-sync-alt"></i> تحديث الطلبات</button>
         <div id="adminOrdersList"></div>
     </div>
 
-    <!-- تبويب فرز الطلبات (معدل: الأقسام ظاهرة دائماً) -->
     <div id="adminFilterTab" class="hidden">
         <div class="card">
             <label>اختر التاريخ (اختياري)</label>
@@ -196,7 +197,6 @@
         </div>
     </div>
 
-    <!-- تبويب السائقين -->
     <div id="adminDriversTab" class="hidden">
         <div class="card">
             <h4>إضافة سائق جديد</h4>
@@ -210,19 +210,16 @@
         <div id="driversList"></div>
     </div>
 
-    <!-- تبويب التقارير -->
     <div id="adminReportsTab" class="hidden">
         <button class="btn btn-primary" onclick="loadAdminReports()"><i class="fas fa-sync-alt"></i> تحديث الإحصائيات العامة</button>
         <div id="adminReportsContent"></div>
 
-        <!-- تقرير مفصل للسائقين -->
         <div class="card" style="margin-top:16px;">
             <h4>تقرير أداء السائقين المفصّل</h4>
             <button class="btn btn-outline" onclick="loadDetailedDriverReport()">عرض التقرير</button>
             <div id="detailedDriverReport"></div>
         </div>
 
-        <!-- تقرير حسب التاريخ -->
         <div class="card" style="margin-top:16px;">
             <h4>تقرير حسب التاريخ</h4>
             <input type="date" id="reportDate">
@@ -232,7 +229,6 @@
     </div>
 </div>
 
-<!-- نوافذ الدردشة والتفاصيل -->
 <div id="chatModal" class="modal hidden">
     <div class="modal-content">
         <h3><i class="fas fa-comments"></i> المحادثة</h3>
@@ -271,7 +267,6 @@
     // دالة نسخ النص
     window.copyPhone = (number) => {
         if (!number) return;
-        // استخدام navigator.clipboard أو بديل
         if (navigator.clipboard) {
             navigator.clipboard.writeText(number).then(() => alert('تم نسخ الرقم: ' + number));
         } else {
@@ -298,6 +293,7 @@
         document.getElementById('custName').value = '';
         document.getElementById('custPhone').value = '';
         document.getElementById('pickupAddress').value = '';
+        document.getElementById('orderDescription').value = '';
         document.getElementById('dropoffAddress').value = '';
         document.getElementById('orderPrice').value = '';
         showScreen('customerOrderScreen');
@@ -352,15 +348,16 @@
         }
     };
 
-    // ---------- طلب الزبون ----------
+    // ---------- طلب الزبون (مُعدّل مع وصف الطلب) ----------
     window.createCustomerOrder = async () => {
         const name = document.getElementById('custName').value.trim();
         const phone = document.getElementById('custPhone').value.trim();
         const pickup = document.getElementById('pickupAddress').value.trim();
+        const description = document.getElementById('orderDescription').value.trim();
         const dropoff = document.getElementById('dropoffAddress').value.trim();
         const price = Number(document.getElementById('orderPrice').value);
         if (!name || !phone || !pickup || !dropoff || !price) {
-            alert('يرجى ملء جميع الحقول');
+            alert('يرجى ملء جميع الحقول (ما عدا الوصف اختياري)');
             return;
         }
         try {
@@ -368,6 +365,7 @@
                 customerName: name,
                 customerPhone: phone,
                 pickup,
+                description: description || '',
                 dropoff,
                 price,
                 status: "pending",
@@ -405,6 +403,9 @@
                     <b>${o.pickup} ← ${o.dropoff}</b><br>
                     السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>
                     السائق: ${o.driverName || 'لم يعين بعد'}`;
+                if (o.description) {
+                    html += `<div class="order-desc">📋 ${o.description}</div>`;
+                }
                 if (o.status === 'negotiating' && o.counterPrice) {
                     html += `<br><span style="color:red;">عرض: ${o.counterPrice} ج.م</span>
                         <button class="btn btn-success btn-sm" onclick="customerAcceptCounter('${id}')">قبول</button>
@@ -468,7 +469,7 @@
         });
     };
 
-    // ---------- السائق (مع نسخ رقم الهاتف) ----------
+    // ---------- السائق ----------
     function listenDriverOrders() {
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
         onSnapshot(q, snap => {
@@ -483,6 +484,9 @@
                     الزبون: ${o.customerName} 
                     <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')" title="نسخ الرقم"><i class="fas fa-copy"></i> ${o.customerPhone}</span><br>
                     السعر: ${o.price} ج.م | <span class="status-badge ${o.status}">${translateStatus(o.status)}</span><br>`;
+                if (o.description) {
+                    html += `<div class="order-desc">📋 ${o.description}</div>`;
+                }
                 if (o.status === 'pending') {
                     html += `<input type="number" id="offerPrice${id}" placeholder="عرض سعرك" style="width:60%;">
                         <button class="btn btn-primary" onclick="makeCounterOffer('${id}')">تقديم عرض</button>
@@ -539,8 +543,7 @@
             loadAllOrders();
         } else if (tabName === 'filter') {
             document.getElementById('adminFilterTab').classList.remove('hidden');
-            // الأقسام ظاهرة دوماً، يمكن تطبيق الفلتر مباشرة لعرض المحتوى الحالي
-            applyFilter(); // تطبيق أولي بدون تاريخ
+            applyFilter();
         } else if (tabName === 'drivers') {
             document.getElementById('adminDriversTab').classList.remove('hidden');
             loadDrivers();
@@ -562,6 +565,9 @@
                 | زبون: ${o.customerName||'---'} <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span><br>
                 | سائق: ${o.driverName||'---'}<br>
                 السعر: ${o.price} ج.م`;
+            if (o.description) {
+                html += `<div class="order-desc">📋 ${o.description}</div>`;
+            }
             if (o.status !== 'delivered' && o.status !== 'cancelled') {
                 html += `<div style="margin-top:8px;">
                     <button class="btn btn-sm btn-danger" onclick="adminCancelOrder('${id}')">إلغاء</button>
@@ -599,6 +605,7 @@
             <h3>تفاصيل الطلب</h3>
             <p><b>الزبون:</b> ${o.customerName} (${o.customerPhone}) <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span></p>
             <p><b>مكان الطلب:</b> ${o.pickup}</p>
+            <p><b>وصف الطلب:</b> ${o.description || 'لا يوجد'}</p>
             <p><b>مكان التسليم:</b> ${o.dropoff}</p>
             <p><b>السعر:</b> ${o.price} ج.م</p>
             <p><b>الحالة:</b> ${translateStatus(o.status)}</p>
@@ -639,7 +646,7 @@
         if (confirm('حذف؟')) { await deleteDoc(doc(db, "users", id)); loadDrivers(); }
     };
 
-    // ---------- فرز الطلبات (معدل: تحديث الأقسام) ----------
+    // ---------- فرز الطلبات ----------
     window.applyFilter = async () => {
         const dateValue = document.getElementById('filterDate').value;
         const q = query(collection(db, "orders"), orderBy("createdAt", "desc"));
@@ -675,8 +682,11 @@
                 html += `<div style="background:#f9f9f9; padding:8px; border-radius:8px; margin:4px 0;">
                     <b>${o.pickup} ← ${o.dropoff}</b><br>
                     زبون: ${o.customerName} <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i> ${o.customerPhone}</span><br>
-                    سائق: ${o.driverName||'---'} | ${o.price} ج.م<br>
-                    <span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
+                    سائق: ${o.driverName||'---'} | ${o.price} ج.م<br>`;
+                if (o.description) {
+                    html += `<div class="order-desc">📋 ${o.description}</div>`;
+                }
+                html += `<span class="status-badge ${o.status}">${translateStatus(o.status)}</span>
                     <button class="btn btn-sm btn-outline" onclick="viewAdminOrderDetail('${o.id}')">تفاصيل</button>
                 </div>`;
             });
@@ -752,8 +762,11 @@
             driverOrders.forEach(o => {
                 html += `<div style="background:#f9f9f9; padding:8px; border-radius:8px; margin:4px 0;">
                     ${o.pickup} ← ${o.dropoff} | ${translateStatus(o.status)} | ${o.price} ج.م | زبون: ${o.customerName}
-                    <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span>
-                </div>`;
+                    <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span>`;
+                if (o.description) {
+                    html += `<div class="order-desc">📋 ${o.description}</div>`;
+                }
+                html += `</div>`;
             });
             container.innerHTML = html || '<p>لا طلبات.</p>';
         });
@@ -807,8 +820,11 @@
             driverOrders.forEach(o => {
                 html += `<div style="background:#f9f9f9; padding:4px; margin:2px; border-radius:6px;">
                     ${o.pickup} → ${o.dropoff} | ${o.price} ج.م | ${translateStatus(o.status)} | زبون: ${o.customerName}
-                    <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span>
-                </div>`;
+                    <span class="copy-btn" onclick="copyPhone('${o.customerPhone}')"><i class="fas fa-copy"></i></span>`;
+                if (o.description) {
+                    html += `<div class="order-desc">📋 ${o.description}</div>`;
+                }
+                html += `</div>`;
             });
             container.innerHTML = html || '<p>لا طلبات.</p>';
         });
